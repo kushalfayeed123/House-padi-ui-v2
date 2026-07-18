@@ -22,7 +22,7 @@ export default function Home() {
         <PublicLanding />
       </div>
       <Footer />
-      <ChatWidget />
+      {/* <ChatWidget /> */}
       {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
     </main>
   );

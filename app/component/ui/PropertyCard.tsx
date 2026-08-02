@@ -4,7 +4,7 @@ import { Property } from "@/app/types/property";
 
 export const PropertyCard = ({ property }: { property: Property }) => (
   <div className="glass-card rounded-2xl overflow-hidden group cursor-pointer flex flex-col h-full">
-    <div className="relative h-56 w-full overflow-hidden bg-slate-800">
+    <div className="relative h-56 w-full overflow-hidden bg-(--ink-soft)">
       <Image
         src={
           property.images?.[0] ||
@@ -15,20 +15,20 @@ export const PropertyCard = ({ property }: { property: Property }) => (
         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
         className="object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100"
       />
-      <div className="absolute top-4 left-4 glass-panel px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide uppercase text-teal-400">
-        {property.status === "published" ? "Available" : "New"}
+      <div className="absolute top-4 left-4 glass-panel px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide uppercase text-(--amber)">
+        {property.status === "active" ? "Available" : "New"}
       </div>
     </div>
 
     <div className="p-6 flex-1 flex flex-col justify-between">
       <div>
-        <div className="flex justify-between items-start mb-2">
-          <h3 className="font-semibold text-lg text-white leading-tight group-hover:text-teal-400 transition-colors">
+        <div className="flex justify-between items-start mb-2 gap-3">
+          <h3 className="font-display font-medium text-lg text-white leading-tight group-hover:text-(--amber) transition-colors">
             {property.title || "Premium Residence"}
           </h3>
-          <p className="font-bold text-lg text-white">
+          <p className="font-mono-num font-semibold text-lg text-white text-right shrink-0">
             ${property.price?.toLocaleString() || "4,500"}
-            <span className="text-slate-500 text-sm font-normal block text-right">
+            <span className="text-slate-500 text-xs font-normal block">
               /mo
             </span>
           </p>
@@ -64,9 +64,9 @@ export const PropertyCard = ({ property }: { property: Property }) => (
         </div>
         <Link
           href={`/properties/${property.id}`}
-          className="text-teal-500 font-medium group-hover:translate-x-1 transition-transform"
+          className="text-(--amber) font-medium group-hover:translate-x-1 transition-transform inline-block"
         >
-          Details →{" "}
+          Details →
         </Link>
       </div>
     </div>

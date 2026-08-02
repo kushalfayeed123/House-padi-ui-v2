@@ -26,7 +26,6 @@ export default function CreatePropertyPage() {
     try {
       const uploadedUrls: string[] = [];
 
-      // 1. Upload Images First (with timestamp to prevent conflicts)
       if (selectedFiles) {
         for (let i = 0; i < selectedFiles.length; i++) {
           const file = selectedFiles[i];
@@ -44,7 +43,6 @@ export default function CreatePropertyPage() {
         }
       }
 
-      // 2. Create Property Record
       const payload = {
         ...formData,
         images: uploadedUrls,
@@ -66,20 +64,23 @@ export default function CreatePropertyPage() {
     }
   };
 
+  const inputClass =
+    "w-full p-4 bg-black/30 border border-white/10 rounded-xl text-white placeholder:text-slate-600 focus:outline-none focus:border-[var(--amber)]/50 transition-colors";
+
   return (
     <AuthGuard allowedRole="owner">
-      <main className="min-h-screen bg-slate-950 pt-24 pb-12 px-6">
+      <main className="min-h-screen bg-[var(--ink)] pt-32 pb-12 px-6">
         <div className="max-w-3xl mx-auto">
           <button
             onClick={() => router.back()}
-            className="text-slate-400 flex items-center gap-2 mb-8 hover:text-white"
+            className="text-slate-400 flex items-center gap-2 mb-8 hover:text-white transition-colors"
           >
-            <ArrowLeft size={18} /> Back to Dashboard
+            <ArrowLeft size={18} /> Back to dashboard
           </button>
 
-          <div className="bg-slate-900 border border-white/10 p-8 md:p-12 rounded-3xl shadow-2xl">
-            <h1 className="text-3xl font-bold text-white mb-8">
-              List a New Property
+          <div className="bg-[var(--ink-soft)]/60 border border-white/10 p-8 md:p-12 rounded-3xl shadow-2xl">
+            <h1 className="font-display text-3xl font-semibold text-white mb-8">
+              List a new property
             </h1>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -87,7 +88,7 @@ export default function CreatePropertyPage() {
                 <input
                   required
                   placeholder="Property Title"
-                  className="w-full p-4 bg-slate-800 rounded-xl text-white"
+                  className={inputClass}
                   onChange={(e) =>
                     setFormData({ ...formData, title: e.target.value })
                   }
@@ -96,7 +97,7 @@ export default function CreatePropertyPage() {
                   required
                   type="number"
                   placeholder="Price (Monthly)"
-                  className="w-full p-4 bg-slate-800 rounded-xl text-white"
+                  className={inputClass}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
@@ -109,7 +110,7 @@ export default function CreatePropertyPage() {
               <input
                 required
                 placeholder="Full Address"
-                className="w-full p-4 bg-slate-800 rounded-xl text-white"
+                className={inputClass}
                 onChange={(e) =>
                   setFormData({ ...formData, address_full: e.target.value })
                 }
@@ -119,7 +120,7 @@ export default function CreatePropertyPage() {
                 <input
                   required
                   placeholder="Location"
-                  className="p-4 bg-slate-800 rounded-xl text-white"
+                  className={inputClass}
                   onChange={(e) =>
                     setFormData({ ...formData, location: e.target.value })
                   }
@@ -128,7 +129,7 @@ export default function CreatePropertyPage() {
                   required
                   type="number"
                   placeholder="Bedrooms"
-                  className="p-4 bg-slate-800 rounded-xl text-white"
+                  className={inputClass}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
@@ -141,7 +142,7 @@ export default function CreatePropertyPage() {
               <textarea
                 placeholder="Property Description"
                 rows={4}
-                className="w-full p-4 bg-slate-800 rounded-xl text-white"
+                className={inputClass}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
@@ -155,13 +156,13 @@ export default function CreatePropertyPage() {
                   type="file"
                   multiple
                   onChange={(e) => setSelectedFiles(e.target.files)}
-                  className="w-full p-4 bg-slate-800 rounded-xl text-white"
+                  className={inputClass}
                 />
               </div>
 
               <input
                 placeholder="Amenities (e.g. pool, wifi, parking)"
-                className="w-full p-4 bg-slate-800 rounded-xl text-white"
+                className={inputClass}
                 onChange={(e) =>
                   setFormData({ ...formData, amenities: e.target.value })
                 }
@@ -170,10 +171,10 @@ export default function CreatePropertyPage() {
               <button
                 disabled={loading}
                 type="submit"
-                className="w-full bg-teal-600 py-4 rounded-xl text-white font-bold text-lg hover:bg-teal-500 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full bg-[var(--amber)] hover:bg-[var(--amber-soft)] py-4 rounded-xl text-[var(--ink)] font-semibold text-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {loading && <Loader2 className="animate-spin" size={20} />}
-                {loading ? "Publishing Listing..." : "Publish Property"}
+                {loading ? "Publishing listing..." : "Publish property"}
               </button>
             </form>
           </div>

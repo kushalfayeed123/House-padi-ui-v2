@@ -4,7 +4,7 @@ import { useState } from "react";
 import { authService } from "@/app/service/authService";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
-import { Loader2 } from "lucide-react"; // Ensure lucide-react is installed
+import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,12 +30,12 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-slate-950 p-6">
+    <main className="min-h-screen flex items-center justify-center bg-[var(--ink)] p-6">
       <form
         onSubmit={handleLogin}
-        className="w-full max-w-sm bg-slate-900/50 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl"
+        className="w-full max-w-sm bg-[var(--ink-soft)]/60 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl"
       >
-        <h1 className="text-2xl font-bold text-white mb-2">Welcome Back</h1>
+        <h1 className="font-display text-2xl font-semibold text-white mb-2">Welcome back</h1>
         <p className="text-slate-400 text-sm mb-8">
           Enter your credentials to access your account
         </p>
@@ -51,7 +51,7 @@ export default function LoginPage() {
             type="email"
             placeholder="Email address"
             required
-            className="w-full bg-black/40 border border-white/5 p-4 rounded-xl text-white placeholder:text-slate-600 focus:outline-none focus:border-teal-500/50 transition-all"
+            className="w-full bg-black/30 border border-white/10 p-4 rounded-xl text-white placeholder:text-slate-600 focus:outline-none focus:border-[var(--amber)]/50 transition-colors"
             onChange={(e) =>
               setFormData({ ...formData, email: e.target.value })
             }
@@ -60,7 +60,7 @@ export default function LoginPage() {
             type="password"
             placeholder="Password"
             required
-            className="w-full bg-black/40 border border-white/5 p-4 rounded-xl text-white placeholder:text-slate-600 focus:outline-none focus:border-teal-500/50 transition-all"
+            className="w-full bg-black/30 border border-white/10 p-4 rounded-xl text-white placeholder:text-slate-600 focus:outline-none focus:border-[var(--amber)]/50 transition-colors"
             onChange={(e) =>
               setFormData({ ...formData, password: e.target.value })
             }
@@ -69,7 +69,7 @@ export default function LoginPage() {
 
         <button
           disabled={isLoading}
-          className="w-full mt-8 bg-teal-600 hover:bg-teal-500 py-4 rounded-xl font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="w-full mt-8 bg-[var(--amber)] hover:bg-[var(--amber-soft)] py-4 rounded-xl font-semibold text-[var(--ink)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {isLoading ? (
             <Loader2 className="animate-spin" size={20} />

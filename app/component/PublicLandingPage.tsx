@@ -19,90 +19,181 @@ export const PublicLanding = () => {
 
   useEffect(() => {
     if (aiResults && resultsRef.current) {
-      resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [aiResults]);
 
+  const openAgent = () => {
+    window.dispatchEvent(new CustomEvent("open-agent-chat"));
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white pb-32">
+    <div className="min-h-screen bg-[var(--ink)] text-white pb-32 selection:bg-[var(--amber)] selection:text-[var(--ink)]">
+
       {/* SECTION 1: HERO */}
-      <section className="pt-32 pb-20 px-6 text-center">
-        <h1 className="text-6xl md:text-7xl font-bold mb-6 tracking-tight">Your AI Property Agent.</h1>
-        <p className="text-xl text-slate-400 max-w-2xl mx-auto">Stop searching, start finding. Our intelligent agent curates the market based on your lifestyle.</p>
+      <section className="relative pt-40 pb-28 px-6 overflow-hidden">
+        <div
+          className="absolute inset-0 blueprint-grid opacity-40"
+          style={{ maskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, black, transparent)", WebkitMaskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, black, transparent)" }}
+        />
+        <div className="relative max-w-3xl mx-auto text-center">
+          <span className="inline-flex items-center gap-2 font-mono-num text-[11px] tracking-[0.2em] text-[var(--amber)] uppercase mb-6 border border-[var(--amber)]/30 rounded-full px-3 py-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--verified)] motion-safe:animate-pulse" />
+            Agent online
+          </span>
+          <h1 className="font-display text-5xl md:text-7xl font-semibold mb-6 tracking-tight leading-[1.05]">
+            Tell it what home
+            <br />
+            you&apos;re looking for.
+          </h1>
+          <p className="text-lg text-slate-400 max-w-xl mx-auto mb-10 leading-relaxed">
+            No filters to fight with. Describe your budget, your neighborhood,
+            your must-haves — our agent searches verified listings and replies
+            right here on the page.
+          </p>
+          <button
+            onClick={openAgent}
+            className="inline-flex items-center gap-2 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-semibold text-sm px-6 py-3.5 rounded-2xl transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--amber)]"
+          >
+            Ask the agent
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
       </section>
 
       {/* SECTION 2: DYNAMIC AGENT RESULTS */}
       <div ref={resultsRef} />
       {aiResults && (
-        <section className="max-w-7xl mx-auto px-6 mb-24">
-          <h2 className="text-3xl font-bold mb-8 text-teal-400">Agent Results</h2>
+        <section className="max-w-7xl mx-auto px-6 mb-20">
+          <div className="flex items-baseline justify-between mb-8 border-b border-white/10 pb-4">
+            <h2 className="font-display text-2xl md:text-3xl font-semibold text-[var(--amber)]">
+              Agent results
+            </h2>
+            <span className="font-mono-num text-xs text-slate-500">
+              {aiResults.length} match{aiResults.length === 1 ? "" : "es"} found
+            </span>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {aiResults.map((p, i) => <PropertyCard key={p.id || i} property={p} />)}
+            {aiResults.map((p, i) => (
+              <ResultTicket key={p.id || i} property={p} index={i} />
+            ))}
           </div>
         </section>
       )}
 
-      {/* SECTION 3: TRUST METRICS (Existing) */}
-      <section className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-4 mb-24">
+      {/* SECTION 3: TRUST METRICS */}
+      <section className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-4 mb-20">
         {[["10k+", "Verified"], ["99%", "Accuracy"], ["< 24h", "Closing"], ["Bank", "Secure"]].map(([val, label]) => (
-          <div key={label} className="bg-slate-900 p-8 rounded-3xl border border-white/5">
-            <div className="text-3xl font-bold text-teal-500 mb-1">{val}</div>
+          <div key={label} className="bg-[var(--ink-soft)] p-8 rounded-3xl border border-white/5 border-t-2 border-t-[var(--amber)]/40">
+            <div className="font-mono-num text-3xl font-semibold text-[var(--amber)] mb-1">{val}</div>
             <div className="text-sm text-slate-400 uppercase tracking-widest">{label}</div>
           </div>
         ))}
       </section>
 
-      {/* NEW SECTION 4: MARKET TRENDS */}
-      <section className="py-12 px-6 max-w-7xl mx-auto bg-slate-900/50 rounded-[3rem] border border-white/5 mb-24">
-        <h2 className="text-4xl font-bold mb-12 text-center">Market Snapshot 2026</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {["Rising Demand in Lekki", "High Yield ROI", "Top Neighborhoods"].map((trend) => (
-            <div key={trend} className="p-6 border-l-2 border-teal-500">
-              <h3 className="text-xl font-bold mb-2">{trend}</h3>
-              <p className="text-slate-400">Our AI analyzes thousands of data points to predict market shifts in real-time.</p>
+      {/* SECTION 4: MARKET SNAPSHOT */}
+      <section className="py-14 px-6 max-w-7xl mx-auto bg-[var(--ink-soft)] rounded-[2rem] border border-white/5 mb-20">
+        <div className="flex items-center justify-between mb-10 flex-wrap gap-4">
+          <h2 className="font-display text-3xl md:text-4xl font-semibold">Market snapshot</h2>
+          <span className="font-mono-num text-xs text-slate-500 uppercase tracking-widest">Lagos · Updated live</span>
+        </div>
+        <div className="divide-y divide-white/5">
+          {[
+            ["Rising demand", "Lekki Phase 1", "+18% search volume"],
+            ["Highest yield", "Yaba", "9.2% avg ROI"],
+            ["Fastest close", "Ikoyi", "3.4 days avg"],
+          ].map(([label, place, stat]) => (
+            <div key={place} className="flex flex-col sm:flex-row sm:items-center justify-between py-5 gap-1">
+              <div>
+                <span className="text-xs uppercase tracking-widest text-slate-500">{label}</span>
+                <h3 className="font-display text-xl font-medium">{place}</h3>
+              </div>
+              <span className="font-mono-num text-[var(--verified)] text-sm">{stat}</span>
             </div>
           ))}
         </div>
       </section>
 
       {/* SECTION 5: FEATURED PROPERTIES */}
-      <section className="py-12 px-6 max-w-7xl mx-auto mb-24">
-        <h2 className="text-4xl font-bold mb-12">Featured Properties</h2>
-        {loading ? <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{[1,2,3].map(i => <div key={i} className="h-96 animate-pulse bg-white/5 rounded-3xl" />)}</div> 
-         : <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{properties.map((p: any) => <PropertyCard key={p.id} property={p} />)}</div>}
+      <section className="py-12 px-6 max-w-7xl mx-auto mb-20">
+        <h2 className="font-display text-3xl md:text-4xl font-semibold mb-12">Featured properties</h2>
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[1, 2, 3].map(i => <div key={i} className="h-96 motion-safe:animate-pulse bg-white/5 rounded-3xl" />)}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {properties.map((p: any, i) => <ResultTicket key={p.id} property={p} index={i} />)}
+          </div>
+        )}
       </section>
 
-      {/* NEW SECTION 6: HOW IT WORKS */}
-      <section className="py-24 px-6 bg-teal-900/10 mb-24">
+      {/* SECTION 6: HOW IT WORKS */}
+      <section className="py-20 px-6 bg-[var(--ink-soft)] mb-20">
         <div className="max-w-7xl mx-auto">
-          <h2 className="text-4xl font-bold mb-16 text-center">Seamless Workflow</h2>
+          <h2 className="font-display text-3xl md:text-4xl font-semibold mb-16 text-center">Seamless workflow</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-            {["Talk to AI", "Get Verified Matches", "Close Safely"].map((step, i) => (
-              <div key={step} className="text-center">
-                <div className="w-16 h-16 bg-teal-500 rounded-full flex items-center justify-center text-black font-bold text-2xl mx-auto mb-6">{i + 1}</div>
-                <h3 className="text-xl font-bold mb-4">{step}</h3>
-                <p className="text-slate-400">An end-to-end process designed to remove friction from your search.</p>
+            {[
+              ["Talk to the agent", "Describe what you need in plain language — no forms."],
+              ["Get verified matches", "Every listing carries KYC-checked ownership and pricing."],
+              ["Close safely", "Sign, pay, and move in through one escrowed flow."],
+            ].map(([step, copy], i) => (
+              <div key={step} className="text-center relative">
+                <div className="w-14 h-14 mx-auto mb-6 rounded-full border-2 border-dashed border-[var(--amber)] flex items-center justify-center font-mono-num font-semibold text-[var(--amber)]">
+                  {String(i + 1).padStart(2, "0")}
+                </div>
+                <h3 className="font-display text-xl font-medium mb-3">{step}</h3>
+                <p className="text-slate-400 leading-relaxed">{copy}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* NEW SECTION 7: TESTIMONIALS */}
-      <section className="py-24 px-6 max-w-7xl mx-auto text-center">
-        <h2 className="text-4xl font-bold mb-16">Trusted by 10,000+ Users</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {["The AI found me a home in 2 hours.", "Finally, a transparent search process!"].map((quote, i) => (
-            <div key={i} className="bg-slate-900 p-10 rounded-3xl border border-white/5 italic">
-              "{quote}"
-              <div className="mt-4 font-bold not-italic text-teal-500">— Satisfied Client</div>
+      {/* SECTION 7: TESTIMONIALS */}
+      <section className="py-20 px-6 max-w-7xl mx-auto text-center">
+        <h2 className="font-display text-3xl md:text-4xl font-semibold mb-16">Trusted by 10,000+ users</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+          {[
+            ["The AI found me a home in 2 hours.", "A."],
+            ["Finally, a transparent search process.", "T."],
+          ].map(([quote, initial], i) => (
+            <div
+              key={i}
+              className="relative bg-[var(--ink-soft)] p-8 rounded-2xl rounded-bl-sm border border-white/5 text-left"
+            >
+              <span className="font-display text-4xl text-[var(--amber)]/40 leading-none block mb-2">&quot;</span>
+              <p className="italic text-slate-200 mb-4">{quote}</p>
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-[var(--amber)]/20 border border-[var(--amber)]/40 flex items-center justify-center text-xs font-mono-num text-[var(--amber)]">
+                  {initial}
+                </div>
+                <span className="text-xs text-slate-500 uppercase tracking-widest">Verified renter</span>
+              </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* FIXED AGENT DOCK */}
+      {/* AGENT WIDGET — corner launcher, expands to a fixed-size panel, never covers the page */}
       <ChatBox onResults={setAiResults} />
     </div>
   );
 };
+
+const ResultTicket = ({ property, index }: { property: any; index: number }) => (
+  <div className="ticket-stub relative bg-[var(--ink-soft)] rounded-2xl border border-white/5 overflow-hidden">
+    <div className="absolute top-4 right-4 z-10 -rotate-6 border-2 border-dashed border-[var(--amber)] text-[var(--amber)] text-[10px] font-mono-num font-semibold tracking-widest px-2.5 py-1 rounded-full bg-[var(--ink-soft)]/90">
+      VERIFIED
+    </div>
+    <PropertyCard property={property} />
+    <div className="border-t border-dashed border-white/10 mx-5" />
+    <div className="px-5 py-3 flex justify-between items-center text-[10px] font-mono-num text-slate-500 tracking-wider">
+      <span>REF #{String(property.id ?? index).slice(0, 8).toUpperCase()}</span>
+      <span className="flex items-center gap-1">
+        <span className="w-1 h-1 rounded-full bg-[var(--verified)]" />
+        HOUSEPADI
+      </span>
+    </div>
+  </div>
+);

@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import { ChatWidget } from "./component/chat/ChatWidget";
 import { PublicLanding } from "./component/PublicLandingPage";
 import { Footer } from "./component/ui/Footer";
 import { Header } from "./component/ui/Header";
@@ -16,7 +15,7 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-slate-950 flex flex-col relative">
+    <main className="min-h-screen bg-(--ink) flex flex-col relative">
       <Header />
       <div className="flex-1">
         <PublicLanding />

@@ -11,5 +11,5 @@ export const DashboardLoader = () => {
   if (isLoading) return <div className="p-10">Loading...</div>;
   if (!user) return <PublicLanding />;
 
-  return user.role === "landlord" ? <LandlordDashboard /> : <RenterDashboard />;
+  return user.role === "owner" ? <LandlordDashboard /> : <RenterDashboard />;
 };

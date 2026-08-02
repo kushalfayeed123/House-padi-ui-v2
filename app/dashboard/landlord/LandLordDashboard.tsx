@@ -26,7 +26,7 @@ export const LandlordDashboard = () => {
   });
 
   return (
-    <AuthGuard allowedRole="landlord">
+    <AuthGuard allowedRole="owner">
       <Header />
 
       <div className="max-w-7xl mx-auto p-8 space-y-10 mt-12">

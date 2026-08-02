@@ -89,9 +89,9 @@ export default function RegisterPage() {
             </button>
             <button
               type="button"
-              onClick={() => setFormData({ ...formData, role: "landlord" })}
+              onClick={() => setFormData({ ...formData, role: "owner" })}
               className={`py-2 text-sm font-medium rounded-lg transition-all ${
-                formData.role === "landlord" 
+                formData.role === "owner" 
                   ? "bg-teal-600 text-white" 
                   : "text-slate-400 hover:text-white"
               }`}

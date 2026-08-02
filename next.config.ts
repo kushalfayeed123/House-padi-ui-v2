@@ -5,8 +5,12 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "qfukpexisxzbuiowslwr.supabase.co", // Replace with your actual project ID
+        hostname: "jopoergjjwdvhvpweayh.supabase.co", // Replace with your actual project ID
         pathname: "/storage/v1/object/public/**",
+      },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com", // Replace with your actual project ID
       },
     ],
   },

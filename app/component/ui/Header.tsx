@@ -33,16 +33,16 @@ export const Header = () => {
             <div className="flex items-center gap-4">
               {/* Dashboard link is here */}
               <Link
-                href={getDashboardLink(user.role)}
+                href={getDashboardLink(user.role == 'owner' ? 'landlord' : user.role == 'renter' ? 'renter' : '/' )}
                 className="text-sm text-teal-400 hover:text-teal-300 font-medium"
               >
                 Dashboard
               </Link>
               <span className="text-sm text-slate-300">
-                Hi, {user.full_name?.split(" ")[0]}
+                Hi, {user.first_name?.split(" ")[0]}
               </span>
               <div className="w-10 h-10 rounded-full bg-teal-900 border border-teal-500/30 flex items-center justify-center font-bold text-teal-400">
-                {user.full_name?.charAt(0)}
+                {user.first_name?.charAt(0)}
               </div>
               <button
                 onClick={signOut}

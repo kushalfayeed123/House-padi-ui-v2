@@ -67,7 +67,7 @@ export default function CreatePropertyPage() {
   };
 
   return (
-    <AuthGuard allowedRole="landlord">
+    <AuthGuard allowedRole="owner">
       <main className="min-h-screen bg-slate-950 pt-24 pb-12 px-6">
         <div className="max-w-3xl mx-auto">
           <button

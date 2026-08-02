@@ -8,7 +8,7 @@ export function middleware(request: NextRequest) {
   console.log(path)
 
   // Protect Landlord Routes
-  if (path.includes('/landlord') && role === 'landlord') {
+  if (path.includes('/landlord') && role === 'owner') {
     return NextResponse.redirect(new URL('/', request.url));
   }
 

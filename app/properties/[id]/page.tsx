@@ -20,7 +20,7 @@ export default function PropertyPage() {
   if (isLoading) return <div className="text-white p-8">Loading...</div>;
   if (isError || !data) return <div className="text-white p-8">Property not found.</div>;
 
-  const isLandlord = user?.role === "landlord" || user?.id === data.owner_id;
+  const isLandlord = user?.role === "owner" || user?.id === data.owner_id;
   const isRenter = user?.role === "renter";
 
   return (

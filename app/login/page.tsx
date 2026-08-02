@@ -8,7 +8,7 @@ import { Loader2 } from "lucide-react"; // Ensure lucide-react is installed
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setUser } = useAuth();
+  const { refreshProfile } = useAuth();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,13 +19,8 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const response = await authService.login(formData);
-      setUser({
-        id: response.user.id,
-        email: response.user.email,
-        full_name: response.user.user_metadata?.full_name || "User",
-        role: response.user.user_metadata?.role || "renter",
-      });
+      await authService.login(formData);
+      await refreshProfile();
       router.push("/");
     } catch (err: any) {
       setError(err.message || "Invalid email or password");

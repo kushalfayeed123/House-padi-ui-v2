@@ -1,48 +1,62 @@
 "use client";
-import { createContext, useContext, useState, useEffect } from "react";
-import { User } from "../types/auth";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { UserProfile } from "../types/user_profile";
+import { apiClient } from "../lib/api-client";
 
 interface AuthContextType {
-  user: User | null;
-  setUser: (user: User | null) => void;
+  user: UserProfile | null;
+  setUser: (user: UserProfile | null) => void;
   isLoading: boolean;
-  signOut: () => Promise<void>; // Added signOut to the interface
+  signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const savedUser = localStorage.getItem("user_data");
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        localStorage.removeItem("user_data");
-      }
+  // Fetch profile strictly from the /api/profile endpoint using the stored token
+  const fetchProfile = useCallback(async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setUser(null);
+      setIsLoading(false);
+      return;
     }
-    setIsLoading(false);
+
+    try {
+      const { data } = await apiClient.get("/api/profile");
+      if (data && data.profile) {
+        setUser(data.profile); // Maps directly to your public.profiles columns
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error("Failed to fetch user profile from endpoint:", error);
+      // Clear invalid or expired tokens
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const signOut = async () => {
-    // 1. Clear local storage so the user doesn't reappear on reload
-    localStorage.removeItem("user_data");
-    
-    // 2. Clear state
-    setUser(null);
-    
-    // 3. Optional: Add an API call here if your backend needs to invalidate the session
-    // await apiClient.post('/api/auth/signout');
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
-    // 4. Force a hard refresh to reset the app state
+  const signOut = async () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    setUser(null);
     window.location.href = "/";
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, isLoading, signOut }}>
+    <AuthContext.Provider value={{ user, setUser, isLoading, signOut, refreshProfile: fetchProfile }}>
       {children}
     </AuthContext.Provider>
   );

@@ -27,9 +27,9 @@ export const PropertyCard = ({ property }: { property: Property }) => (
             {property.title || "Premium Residence"}
           </h3>
           <p className="font-mono-num font-semibold text-lg text-white text-right shrink-0">
-            ${property.price?.toLocaleString() || "4,500"}
+            ${property.price?.toLocaleString() || "0"}
             <span className="text-slate-500 text-xs font-normal block">
-              /mo
+              /yr
             </span>
           </p>
         </div>

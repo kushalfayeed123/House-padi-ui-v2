@@ -4,11 +4,31 @@ import { apiClient } from "@/app/lib/api-client";
 import { ChatBox } from "./chat/ChatBox";
 import { PropertyCard } from "./ui/PropertyCard";
 
+const STORAGE_KEY_RESULTS = "housepadi_ai_results";
+
 export const PublicLanding = () => {
   const [properties, setProperties] = useState([]);
-  const [aiResults, setAiResults] = useState<any[] | null>(null);
+  
+  // Initialize aiResults from localStorage so it persists across page navigations
+  const [aiResults, setAiResults] = useState<any[] | null>(() => {
+    if (typeof window === "undefined") return null;
+    const saved = localStorage.getItem(STORAGE_KEY_RESULTS);
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [loading, setLoading] = useState(true);
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Sync aiResults to localStorage whenever it updates
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (aiResults && aiResults.length > 0) {
+        localStorage.setItem(STORAGE_KEY_RESULTS, JSON.stringify(aiResults));
+      } else {
+        localStorage.removeItem(STORAGE_KEY_RESULTS);
+      }
+    }
+  }, [aiResults]);
 
   useEffect(() => {
     apiClient.get("/api/property/featured")
@@ -63,15 +83,26 @@ export const PublicLanding = () => {
 
       {/* SECTION 2: DYNAMIC AGENT RESULTS */}
       <div ref={resultsRef} />
-      {aiResults && (
+      {aiResults && aiResults.length > 0 && (
         <section className="max-w-7xl mx-auto px-6 mb-20">
           <div className="flex items-baseline justify-between mb-8 border-b border-white/10 pb-4">
             <h2 className="font-display text-2xl md:text-3xl font-semibold text-[var(--amber)]">
               Agent results
             </h2>
-            <span className="font-mono-num text-xs text-slate-500">
-              {aiResults.length} match{aiResults.length === 1 ? "" : "es"} found
-            </span>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => {
+                  setAiResults(null);
+                  localStorage.removeItem(STORAGE_KEY_RESULTS);
+                }}
+                className="text-xs text-slate-400 hover:text-white transition-colors underline underline-offset-4"
+              >
+                Clear Results
+              </button>
+              <span className="font-mono-num text-xs text-slate-500">
+                {aiResults.length} match{aiResults.length === 1 ? "" : "es"} found
+              </span>
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {aiResults.map((p, i) => (
@@ -175,7 +206,7 @@ export const PublicLanding = () => {
         </div>
       </section>
 
-      {/* AGENT WIDGET — corner launcher, expands to a fixed-size panel, never covers the page */}
+      {/* AGENT WIDGET */}
       <ChatBox onResults={setAiResults} />
     </div>
   );

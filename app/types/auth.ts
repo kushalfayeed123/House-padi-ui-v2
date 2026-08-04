@@ -20,6 +20,8 @@ export interface RegisterData {
 export interface AuthResponse {
   access_token: string;
   refresh_token: string;
+  return_url?: string | null;
+  redirect_url?: string | null;
   user: {
     id: string;
     email: string;

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, Loader2, X, Calendar, Eye, MapPin } from "lucide-react";
+import { Send, Bot, Loader2, X, Calendar, Eye, MapPin, ArrowRight } from "lucide-react";
 import { apiClient } from "@/app/lib/api-client";
 import { useRouter } from "next/navigation";
 
@@ -21,8 +21,8 @@ export const ChatBox = ({
   });
 
   const [messages, setMessages] = useState<
-    { role: "user" | "assistant"; content: string; properties?: any[] }[]
-  >(() => {
+    { role: "user" | "assistant"; content: string; properties?: any[]; redirectUrl?: string }[]
+ >(() => {
     if (typeof window === "undefined") return [];
     const saved = localStorage.getItem(STORAGE_KEY_MESSAGES);
     return saved ? JSON.parse(saved) : [];
@@ -99,14 +99,10 @@ export const ChatBox = ({
         role: "assistant" as const,
         content: apiResponse.response || "Here are the properties matching your criteria:",
         properties: apiResponse.data && apiResponse.data.length > 0 ? apiResponse.data : undefined,
+        redirectUrl: apiResponse.redirect_url || undefined,
       };
 
       setMessages([...newMessages, assistantMessage]);
-
-      if (apiResponse.redirect_url) {
-        router.push(apiResponse.redirect_url);
-        return;
-      }
 
       if (apiResponse.data && apiResponse.data.length > 0) {
         onResults(apiResponse.data);
@@ -186,14 +182,35 @@ export const ChatBox = ({
                     <Bot size={12} className="text-[var(--amber)]" />
                   </div>
                 )}
-                <div
-                  className={`p-3.5 rounded-2xl text-sm max-w-[85%] leading-relaxed ${
-                    m.role === "user"
-                      ? "bg-[var(--amber)] text-[var(--ink)] font-medium rounded-br-sm"
-                      : "bg-white/5 text-slate-100 rounded-bl-sm"
-                  }`}
-                >
-                  {m.content}
+                <div className={`flex flex-col gap-2 ${m.role === "user" ? "items-end" : "items-start"} max-w-[85%]`}>
+                  <div
+                    className={`p-3.5 rounded-2xl text-sm leading-relaxed ${
+                      m.role === "user"
+                        ? "bg-[var(--amber)] text-[var(--ink)] font-medium rounded-br-sm"
+                        : "bg-white/5 text-slate-100 rounded-bl-sm"
+                    }`}
+                  >
+                    {m.content}
+                  </div>
+
+                  {m.role === "assistant" && m.redirectUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = m.redirectUrl!.trim();
+                        if (target.startsWith("http://") || target.startsWith("https://")) {
+                          window.location.assign(target);
+                        } else {
+                          const normalizedTarget = target.startsWith("/") ? target : `/${target}`;
+                          router.push(normalizedTarget);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 self-start rounded-full border border-[var(--amber)]/30 bg-[var(--amber)]/10 px-3 py-1.5 text-[11px] font-semibold text-[var(--amber)] transition-colors hover:bg-[var(--amber)]/20"
+                    >
+                      Open page
+                      <ArrowRight size={12} />
+                    </button>
+                  )}
                 </div>
               </div>
 

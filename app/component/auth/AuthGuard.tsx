@@ -12,9 +12,14 @@ export const AuthGuard = ({ children, allowedRole }: { children: React.ReactNode
     if (!user) {
       window.dispatchEvent(new Event('open-auth-modal'));
       router.push('/');
-    } else if (user.role !== allowedRole) {
-      // Role mismatch: redirect to their respective dashboard or home
-      router.push(user.role === 'owner' ? '/landlord/dashboard' : '/dashboard/renter');
+      return;
+    }
+
+    if (user.role !== allowedRole) {
+      const fallbackPath = user.role === 'owner' ? '/dashboard/landlord' : '/dashboard/renter';
+      if (pathname !== fallbackPath) {
+        router.replace(fallbackPath);
+      }
     }
   }, [user, allowedRole, router, pathname]);
 

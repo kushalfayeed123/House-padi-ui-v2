@@ -72,7 +72,7 @@ export default function CreatePropertyPage() {
       <main className="min-h-screen bg-[var(--ink)] pt-32 pb-12 px-6">
         <div className="max-w-3xl mx-auto">
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push('/dashboard/landlord')}
             className="text-slate-400 flex items-center gap-2 mb-8 hover:text-white transition-colors"
           >
             <ArrowLeft size={18} /> Back to dashboard

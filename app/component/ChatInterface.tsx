@@ -1,11 +1,12 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { apiClient } from "../lib/api-client";
 
 export const ChatInterface = ({ sessionId }: { sessionId: string }) => {
   const [messages, setMessages] = useState<
-    { role: "user" | "agent"; text: string }[]
+    { role: "user" | "agent"; text: string; redirectUrl?: string }[]
   >([]);
   const [input, setInput] = useState("");
   const router = useRouter();
@@ -20,8 +21,7 @@ export const ChatInterface = ({ sessionId }: { sessionId: string }) => {
       text: msg,
       session_id: sessionId,
     });
-    setMessages((prev) => [...prev, { role: "agent", text: data.response }]);
-    if (data.redirect_url) router.push(data.redirect_url);
+    setMessages((prev) => [...prev, { role: "agent", text: data.response, redirectUrl: data.redirect_url }]);
   };
 
   return (
@@ -35,10 +35,30 @@ export const ChatInterface = ({ sessionId }: { sessionId: string }) => {
             key={i}
             className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
           >
-            <div
-              className={`max-w-[85%] p-4 rounded-2xl text-sm ${m.role === "user" ? "bg-teal-600" : "bg-slate-800"}`}
-            >
-              {m.text}
+            <div className="flex flex-col gap-2 max-w-[85%]">
+              <div
+                className={`p-4 rounded-2xl text-sm ${m.role === "user" ? "bg-teal-600" : "bg-slate-800"}`}
+              >
+                {m.text}
+              </div>
+              {m.role === "agent" && m.redirectUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = m.redirectUrl!.trim();
+                    if (target.startsWith("http://") || target.startsWith("https://")) {
+                      window.location.assign(target);
+                    } else {
+                      const normalizedTarget = target.startsWith("/") ? target : `/${target}`;
+                      router.push(normalizedTarget);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 self-start rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1.5 text-xs font-semibold text-teal-300 transition-colors hover:bg-teal-500/20"
+                >
+                  Open page
+                  <ArrowRight size={12} />
+                </button>
+              )}
             </div>
           </div>
         ))}

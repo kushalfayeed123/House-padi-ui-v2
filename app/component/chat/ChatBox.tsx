@@ -31,6 +31,34 @@ type ChatMessage = {
   };
 };
 
+const getActionLoaderText = (text: string): string => {
+  const lower = text.toLowerCase();
+  if (lower.includes("tour") || lower.includes("schedule") || lower.includes("visit")) {
+    return "Scheduling tour...";
+  }
+  if (lower.includes("lease") || lower.includes("sign") || lower.includes("agreement")) {
+    return "Reviewing lease details...";
+  }
+  if (lower.includes("pay") || lower.includes("wallet") || lower.includes("balance") || lower.includes("deposit")) {
+    return "Processing payment details...";
+  }
+  if (lower.includes("kyc") || lower.includes("verify") || lower.includes("identity")) {
+    return "Verifying identity status...";
+  }
+  if (
+    lower.includes("search") ||
+    lower.includes("find") ||
+    lower.includes("bedroom") ||
+    lower.includes("apartment") ||
+    lower.includes("rent") ||
+    lower.includes("house") ||
+    lower.includes("looking for")
+  ) {
+    return "Searching property listings...";
+  }
+  return "HousePadi Agent is thinking...";
+};
+
 const renderMessageContent = (content: string): ReactNode[] => {
   const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
   const fragments: ReactNode[] = [];
@@ -55,7 +83,7 @@ const renderMessageContent = (content: string): ReactNode[] => {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 font-medium text-[var(--amber)] underline decoration-[var(--amber)]/60 underline-offset-2 break-all hover:text-[var(--amber-soft)]"
+        className="inline-flex items-center gap-1 font-medium text-(--amber) underline decoration-(--amber)/60 underline-offset-2 break-all hover:text-(--amber-soft)"
       >
         <span>{rawUrl}</span>
         <span className="text-[10px]">↗</span>
@@ -74,8 +102,10 @@ const renderMessageContent = (content: string): ReactNode[] => {
 
 export const ChatBox = ({
   onResults,
+  loaderText: customLoaderText,
 }: {
   onResults: (data: SearchProperty[]) => void;
+  loaderText?: string;
 }) => {
   // Initialize isOpen state from localStorage to preserve open/closed state across navigations
   const [isOpen, setIsOpen] = useState<boolean>(() => {
@@ -110,6 +140,7 @@ export const ChatBox = ({
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [activeLoaderText, setActiveLoaderText] = useState("Agent is thinking...");
   const [tourSelection, setTourSelection] = useState<{ date: string; time: string }>({
     date: "",
     time: "",
@@ -167,6 +198,7 @@ export const ChatBox = ({
     const messageText = `Please book a tour for ${tourSelection.date} at ${tourSelection.time}`;
     const newMessages = [...messages, { role: "user" as const, content: messageText }];
     setMessages(newMessages);
+    setActiveLoaderText("Scheduling tour...");
     setLoading(true);
 
     try {
@@ -226,6 +258,7 @@ export const ChatBox = ({
     const newMessages = [...messages, { role: "user" as const, content: messageText }];
     setMessages(newMessages);
     if (!textToSend) setInput("");
+    setActiveLoaderText(getActionLoaderText(messageText));
     setLoading(true);
 
     try {
@@ -505,7 +538,7 @@ export const ChatBox = ({
 
           {loading && (
             <div className="text-[var(--amber)] text-xs flex gap-2 items-center pl-10">
-              <Loader2 className="animate-spin" size={14} /> Agent is searching listings...
+              <Loader2 className="animate-spin" size={14} /> {customLoaderText || activeLoaderText}
             </div>
           )}
         </div>

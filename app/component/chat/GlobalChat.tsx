@@ -9,9 +9,15 @@ export const GlobalChat = () => {
   const isAuthRoute =
     pathname === "/login" || pathname === "/register" || pathname.startsWith("/login/") || pathname.startsWith("/register/");
 
+  const handleResults = (data: Array<Record<string, unknown>>) => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("agent-results", { detail: data }));
+    }
+  };
+
   if (isAuthRoute) {
     return null;
   }
 
-  return <ChatBox onResults={() => undefined} />;
+  return <ChatBox onResults={handleResults} />;
 };

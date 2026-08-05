@@ -42,6 +42,18 @@ export const PublicLanding = () => {
     }
   }, [aiResults]);
 
+  useEffect(() => {
+    const handleResultsEvent = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (Array.isArray(detail)) {
+        setAiResults(detail as any[]);
+      }
+    };
+
+    window.addEventListener("agent-results", handleResultsEvent);
+    return () => window.removeEventListener("agent-results", handleResultsEvent);
+  }, []);
+
   const openAgent = () => {
     window.dispatchEvent(new CustomEvent("open-agent-chat"));
   };

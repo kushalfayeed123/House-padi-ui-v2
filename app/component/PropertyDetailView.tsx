@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Property } from "../types/property";
 import { EditPropertyModal } from "./modals/EditPropertyModal";
 import { ChevronLeft, ChevronRight, MapPin, ArrowLeft, Building, LayoutGrid, CalendarDays, FileCheck } from "lucide-react";
+import { apiClient } from "../lib/api-client";
 
 interface PropertyDetailsViewProps {
   property: Property;
@@ -20,9 +21,33 @@ export const PropertyDetailsView = ({
   const router = useRouter();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [tourSelection, setTourSelection] = useState<{ date: string; time: string }>({ date: "", time: "" });
+  const [tourStatus, setTourStatus] = useState<string | null>(null);
+  const [isSubmittingTour, setIsSubmittingTour] = useState(false);
 
   const nextImage = () => setCurrentIdx((prev) => (prev + 1) % property.images.length);
   const prevImage = () => setCurrentIdx((prev) => (prev - 1 + property.images.length) % property.images.length);
+
+  const handleTourSubmit = async () => {
+    if (!tourSelection.date || !tourSelection.time) return;
+
+    setIsSubmittingTour(true);
+    setTourStatus(null);
+
+    try {
+      const { data } = await apiClient.post("/api/chat", {
+        message: `Please book a tour for ${tourSelection.date} at ${tourSelection.time} for this property. title=${property.title} | location=${property.location} | full_address=${property.address_full}`,
+        property_id: property.id,
+      });
+
+      setTourStatus(data?.content || data?.response || "Tour request submitted successfully.");
+      setTourSelection({ date: "", time: "" });
+    } catch {
+      setTourStatus("Sorry, I couldn’t submit the tour request right now.");
+    } finally {
+      setIsSubmittingTour(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-(--ink) text-slate-100 antialiased">
@@ -117,9 +142,33 @@ export const PropertyDetailsView = ({
                   <Building size={16} className="text-[var(--amber)]" />
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Tenant Actions</h3>
                 </div>
-                <button className="w-full py-3 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
-                  <CalendarDays size={16} /> Schedule Viewing
-                </button>
+                <div className="rounded-2xl border border-[var(--amber)]/20 bg-[var(--amber)]/10 p-4 space-y-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--amber)]">
+                    Select tour date & time
+                  </div>
+                  <input
+                    type="date"
+                    value={tourSelection.date}
+                    onChange={(e) => setTourSelection((prev) => ({ ...prev, date: e.target.value }))}
+                    className="w-full rounded-xl border border-white/10 bg-[var(--ink)]/70 px-3 py-2 text-sm text-white"
+                  />
+                  <input
+                    type="time"
+                    value={tourSelection.time}
+                    onChange={(e) => setTourSelection((prev) => ({ ...prev, time: e.target.value }))}
+                    className="w-full rounded-xl border border-white/10 bg-[var(--ink)]/70 px-3 py-2 text-sm text-white"
+                  />
+                  <button
+                    onClick={handleTourSubmit}
+                    disabled={!tourSelection.date || !tourSelection.time || isSubmittingTour}
+                    className="w-full py-3 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <CalendarDays size={16} /> {isSubmittingTour ? "Submitting..." : "Schedule Viewing"}
+                  </button>
+                  {tourStatus && (
+                    <p className="text-xs text-slate-300">{tourStatus}</p>
+                  )}
+                </div>
                 <button className="w-full py-3 bg-[var(--ink)] hover:bg-white/5 text-slate-300 border border-white/10 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
                   <FileCheck size={16} /> Apply for Lease
                 </button>

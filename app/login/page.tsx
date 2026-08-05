@@ -7,6 +7,22 @@ import { useAuth } from "@/app/context/AuthContext";
 import { Loader2 } from "lucide-react";
 import { AuthResponse } from "@/app/types/auth";
 
+const isAccessTokenExpired = (token: string | null) => {
+  if (!token) return true;
+
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return true;
+
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = JSON.parse(atob(normalized));
+    if (!decoded.exp) return false;
+    return decoded.exp * 1000 <= Date.now();
+  } catch {
+    return true;
+  }
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -25,6 +41,13 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
+    const token = window.localStorage.getItem("access_token");
+    if (isAccessTokenExpired(token)) {
+      window.localStorage.removeItem("access_token");
+      window.localStorage.removeItem("refresh_token");
+      return;
+    }
+
     if (!user) return;
 
     const destination = (() => {

@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { apiClient } from "@/app/lib/api-client";
-import { ChatBox } from "./chat/ChatBox";
 import { PropertyCard } from "./ui/PropertyCard";
 
 const STORAGE_KEY_RESULTS = "housepadi_ai_results";
@@ -206,8 +205,6 @@ export const PublicLanding = () => {
         </div>
       </section>
 
-      {/* AGENT WIDGET */}
-      <ChatBox onResults={setAiResults} />
     </div>
   );
 };

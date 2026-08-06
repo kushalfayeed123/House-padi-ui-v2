@@ -4,7 +4,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Property } from "../types/property";
 import { EditPropertyModal } from "./modals/EditPropertyModal";
-import { ChevronLeft, ChevronRight, MapPin, ArrowLeft, Building, LayoutGrid, CalendarDays, FileCheck } from "lucide-react";
+import { LeaseFlowModal } from "./modals/LeaseFlowModal";
+import { ChevronLeft, ChevronRight, MapPin, ArrowLeft, Building, LayoutGrid, CalendarDays, FileCheck, Bot } from "lucide-react";
 import { apiClient } from "../lib/api-client";
 
 interface PropertyDetailsViewProps {
@@ -20,6 +21,7 @@ export const PropertyDetailsView = ({
 }: PropertyDetailsViewProps) => {
   const router = useRouter();
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isLeaseModalOpen, setIsLeaseModalOpen] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [tourSelection, setTourSelection] = useState<{ date: string; time: string }>({ date: "", time: "" });
   const [tourStatus, setTourStatus] = useState<string | null>(null);
@@ -47,6 +49,16 @@ export const PropertyDetailsView = ({
     } finally {
       setIsSubmittingTour(false);
     }
+  };
+
+  const handleOpenAgentForLease = () => {
+    window.dispatchEvent(
+      new CustomEvent("open-agent-chat", {
+        detail: {
+          prefill: `I would like to apply for a lease for property ID: ${property.id} (${property.title})`,
+        },
+      })
+    );
   };
 
   return (
@@ -142,6 +154,8 @@ export const PropertyDetailsView = ({
                   <Building size={16} className="text-[var(--amber)]" />
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Tenant Actions</h3>
                 </div>
+
+                {/* Tour Schedule Section */}
                 <div className="rounded-2xl border border-[var(--amber)]/20 bg-[var(--amber)]/10 p-4 space-y-3">
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--amber)]">
                     Select tour date & time
@@ -169,14 +183,26 @@ export const PropertyDetailsView = ({
                     <p className="text-xs text-slate-300">{tourStatus}</p>
                   )}
                 </div>
-                <button className="w-full py-3 bg-[var(--ink)] hover:bg-white/5 text-slate-300 border border-white/10 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
-                  <FileCheck size={16} /> Apply for Lease
+
+                {/* Direct Lease Application CTA */}
+                <button
+                  onClick={() => setIsLeaseModalOpen(true)}
+                  className="w-full py-3.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-black/20"
+                >
+                  <FileCheck size={16} /> Apply for Lease (Direct)
+                </button>
+
+                {/* AI Agent Assisted CTA */}
+                <button
+                  onClick={handleOpenAgentForLease}
+                  className="w-full py-3 bg-[var(--ink)] hover:bg-white/5 text-slate-300 border border-white/10 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2"
+                >
+                  <Bot size={16} className="text-[var(--amber)]" /> Apply via Agent Chat
                 </button>
               </div>
             )}
 
-            {/* Verification section — the ticket-stub signature is most at home here,
-                since this card's entire job is showing trust/verification status. */}
+            {/* Verification Section */}
             <div className="ticket-stub relative bg-[var(--ink-soft)]/40 border border-white/10 rounded-2xl p-6 space-y-4 overflow-hidden">
               <div className="absolute top-4 right-4 -rotate-6 border-2 border-dashed border-[var(--verified)] text-[var(--verified)] text-[9px] font-mono-num font-semibold tracking-widest px-2 py-0.5 rounded-full">
                 VERIFIED
@@ -204,9 +230,17 @@ export const PropertyDetailsView = ({
         </div>
       </main>
 
+      {/* Edit Landlord Modal */}
       {isLandlord && (
         <EditPropertyModal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} property={property} />
       )}
+
+      {/* Direct Lease Flow Modal */}
+      <LeaseFlowModal
+        isOpen={isLeaseModalOpen}
+        onClose={() => setIsLeaseModalOpen(false)}
+        property={property}
+      />
     </div>
   );
 };

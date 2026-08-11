@@ -60,12 +60,14 @@ const formatStatus = (status: string) =>
 
 export const LandlordDashboard = () => {
   const [activeTab, setActiveTab] = useState("properties");
+  const [subTab, setSubTab] = useState<"pending" | "approved" | "denied">("pending");
   const [dashboardData, setDashboardData] = useState<any[]>([]);
   const [feedback, setFeedback] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const tabs = ["properties", "tours", "applications"];
+  const subTabs: Array<"pending" | "approved" | "denied"> = ["pending", "approved", "denied"];
 
   // Map tabs to clean backend API endpoints
   const getTabEndpoint = (tab: string) => {
@@ -102,7 +104,7 @@ export const LandlordDashboard = () => {
     setFeedback(null);
 
     try {
-      await apiClient.post(`/tours/${tourId}/${decision}`);
+      await apiClient.post(`api/tours/${tourId}/${decision}`);
       setFeedback({
         msg: `Tour ${decision === "approve" ? "approved" : "denied"} successfully.`,
         type: "success",
@@ -123,7 +125,7 @@ export const LandlordDashboard = () => {
     if (!confirm("Are you sure you want to archive this property?")) return;
     setActionLoadingId(propertyId);
     try {
-      await apiClient.delete(`/property/${propertyId}`);
+      await apiClient.delete(`api/property/${propertyId}`);
       setFeedback({ msg: "Property archived successfully.", type: "success" });
       queryClient.invalidateQueries({ queryKey: ["landlord", "properties"] });
     } catch (err: any) {
@@ -135,6 +137,18 @@ export const LandlordDashboard = () => {
       setActionLoadingId(null);
     }
   };
+
+  // Filter items based on selected sub-tab for tours and applications
+  const filteredData = dashboardData.filter((item) => {
+    if (activeTab === "properties") return true;
+
+    const status = (item.status || "").toLowerCase();
+    if (subTab === "pending") return status.includes("pending");
+    if (subTab === "approved") return status.includes("approve");
+    if (subTab === "denied") return status.includes("denied") || status.includes("reject");
+
+    return true;
+  });
 
   return (
     <AuthGuard allowedRole="owner">
@@ -161,12 +175,14 @@ export const LandlordDashboard = () => {
             </Link>
           </header>
 
+          {/* Main Navigation Tabs */}
           <nav className="flex gap-1 border-b border-white/10">
             {tabs.map((tab) => (
               <button
                 key={tab}
                 onClick={() => {
                   setActiveTab(tab);
+                  setSubTab("pending"); // Reset subtab when main tab changes
                   setFeedback(null);
                 }}
                 className={`px-6 py-3 capitalize font-medium transition-colors relative ${
@@ -180,6 +196,25 @@ export const LandlordDashboard = () => {
               </button>
             ))}
           </nav>
+
+          {/* Secondary Sub-Tabs for Tours and Applications */}
+          {activeTab !== "properties" && (
+            <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/10 w-fit">
+              {subTabs.map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setSubTab(st)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
+                    subTab === st
+                      ? "bg-[var(--amber)] text-[var(--ink)] shadow"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+          )}
 
           {feedback && (
             <div
@@ -202,14 +237,14 @@ export const LandlordDashboard = () => {
               <div className="text-red-400">
                 Error loading {activeTab}. Please try again.
               </div>
-            ) : !dashboardData || dashboardData.length === 0 ? (
+            ) : !filteredData || filteredData.length === 0 ? (
               <div className="text-center py-20 border-2 border-dashed border-[var(--amber)]/20 rounded-2xl text-slate-500">
-                No {activeTab} found.
+                No {activeTab !== "properties" ? `${subTab} ` : ""}{activeTab} found.
               </div>
             ) : (
               <RenderContent
                 tab={activeTab}
-                items={dashboardData}
+                items={filteredData}
                 onTourDecision={handleTourDecision}
                 onArchiveProperty={handleArchiveProperty}
                 actionLoadingId={actionLoadingId}
@@ -235,8 +270,6 @@ const RenderContent = ({
   onArchiveProperty: (propertyId: string) => void;
   actionLoadingId: string | null;
 }) => {
-  const queryClient = useQueryClient();
-
   if (tab === "properties") {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -362,7 +395,7 @@ const RenderContent = ({
                   View Property
                 </Link>
 
-                {tour.status === "pending_approval" && (
+                {tour.status.toLowerCase().includes("pending") && (
                   <div className="flex gap-2">
                     <button
                       onClick={() => onTourDecision(tour.id, "approve")}
@@ -424,7 +457,7 @@ const LandlordApplicationCard = ({ application }: { application: LandlordApplica
     setErrorMsg(null);
 
     try {
-      await apiClient.post(`/applications/${application.id}/approve`, {
+      await apiClient.post(`/api/applications/${application.id}/approve`, {
         landlord_signature: signature,
       });
       queryClient.invalidateQueries({ queryKey: ["landlord", "applications"] });
@@ -449,7 +482,7 @@ const LandlordApplicationCard = ({ application }: { application: LandlordApplica
     }
   };
 
-  const isPending = application.status.toLowerCase().includes("pending");
+  const isPending = application.status.toLowerCase() === "pending_landlord_approval";
 
   return (
     <div className="rounded-2xl border border-white/10 bg-[var(--ink-soft)] p-6 space-y-4">

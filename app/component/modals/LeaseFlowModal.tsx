@@ -5,6 +5,7 @@ import { X, CheckCircle2, ShieldCheck, CreditCard, PenTool, FileText, ArrowRight
 import { Property } from "@/app/types/property";
 import { apiClient } from "@/app/lib/api-client";
 
+
 interface LeaseFlowModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -16,6 +17,8 @@ export const LeaseFlowModal = ({
   onClose,
   property,
 }: LeaseFlowModalProps) => {
+
+  
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);

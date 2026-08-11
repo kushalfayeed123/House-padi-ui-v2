@@ -8,7 +8,6 @@ import {
   Calendar,
   Eye,
   MapPin,
-  ArrowRight,
   ChevronDown,
   ChevronUp,
   FileText,
@@ -16,9 +15,13 @@ import {
   CreditCard,
   CheckCircle2,
   ExternalLink,
+  ShieldCheck,
+  Download,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/app/lib/api-client";
+import { useAuth } from "../../context/AuthContext";
+
 
 const STORAGE_KEY_MESSAGES = "housepadi_chat_messages";
 const STORAGE_KEY_THREAD = "housepadi_thread_id";
@@ -36,12 +39,17 @@ type SearchProperty = {
 };
 
 type LeaseUiState = {
-  ui_component: "application_form" | "signature_pad" | "payment_gateway" | "lease_completed";
+  ui_component: "application_form" | "signature_pad" | "payment_gateway" | "lease_completed" | "lease_application_signer";
   lease_id?: string;
   property_id?: string;
   amount?: number;
   status?: string;
   message?: string;
+  action?: string;
+  step?: 1 | 2 | 3;
+  startDate?: string;
+  renterSignature?: string;
+  applicationId?: string;
 };
 
 type TourUiState = {
@@ -60,6 +68,8 @@ type ChatMessage = {
   tourUi?: TourUiState;
   leaseUi?: LeaseUiState;
 };
+
+
 
 const getActionLoaderText = (text: string): string => {
   const lower = text.toLowerCase();
@@ -95,6 +105,337 @@ const renderMessageContent = (content: string): ReactNode[] => {
   return fragments.length > 0 ? fragments : [<span key="empty">{content}</span>];
 };
 
+// Interactive Inline Lease Flow Widget with persistent state synchronization
+// Interactive Inline Lease Flow Widget with Landlord Gate & Payment Initialization/Simulation
+const InlineLeaseWidget = ({
+  propertyId,
+  initialAmount = 500000,
+  leaseUi,
+  onStateChange,
+  userId,
+}: {
+  propertyId: string;
+  initialAmount?: number;
+  leaseUi?: LeaseUiState;
+  onStateChange: (updated: Partial<LeaseUiState>) => void;
+  userId: string;
+}) => {
+  const [step, setStep] = useState<1 | 2 | 3>(leaseUi?.step || 1);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [startDate, setStartDate] = useState(leaseUi?.startDate || "");
+  const [renterSignature, setRenterSignature] = useState(leaseUi?.renterSignature || "");
+  const [applicationId, setApplicationId] = useState<string | null>(leaseUi?.applicationId || null);
+  const [leaseId, setLeaseId] = useState<string | undefined>(leaseUi?.lease_id || undefined);
+  const [applicationStatus, setApplicationStatus] = useState<string>(leaseUi?.status || "pending_approval");
+  
+  // Payment states
+  const [paymentInitialized, setPaymentInitialized] = useState(false);
+
+  const totalPayment = initialAmount;
+
+  // Step 1: Submit Application & Digital Signature
+  const handleApplyAndSign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      const response = await apiClient.post(
+        `/api/applications/properties/${propertyId}/apply`,
+        {
+          renter_signature: renterSignature,
+          start_date: startDate,
+        }
+      );
+      
+      const responseData = response.data?.data || response.data;
+      const returnedLeaseId = responseData.lease_id;
+      const returnedAppId = responseData.application_id;
+
+      setLeaseId(returnedLeaseId);
+      setApplicationId(returnedAppId);
+      setApplicationStatus("pending_approval");
+      
+      onStateChange({
+        step: 1,
+        startDate,
+        renterSignature,
+        applicationId: returnedAppId,
+        lease_id: returnedLeaseId,
+        status: "pending_approval",
+      });
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.detail || "Failed to submit application.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check Landlord Approval Status
+  const handleCheckApprovalStatus = async () => {
+    if (!applicationId && !leaseId) return;
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      const response = await apiClient.get(`/api/applications/${applicationId}`);
+      
+      const resData = response.data?.data || response.data;
+      const currentStatus = resData.status;
+
+      setApplicationStatus(currentStatus);
+
+      if (currentStatus === "approved_pending_payment") {
+        setStep(2);
+        onStateChange({
+          step: 2,
+          status: "approved_pending_payment",
+        });
+      } else if (currentStatus === "completed" || currentStatus === "active") {
+        setStep(3);
+        onStateChange({
+          step: 3,
+          status: "completed",
+        });
+      } else {
+        setErrorMsg("Application is still pending landlord review. Please check back shortly.");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.detail || "Failed to fetch application status.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step A (Payment): Initialize Payment first (/payments/initialize)
+  const handleInitializePayment = async () => {
+    if (!leaseId) return;
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      await apiClient.post("/payments/initialize", {
+        lease_id: leaseId,
+        amount: totalPayment,
+      });
+
+      setPaymentInitialized(true);
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.detail || "Payment initialization failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step B (Payment): Simulate Payment Webhook after initialization (/payments/webhook)
+  const handleSimulateWebhook = async () => {
+    
+    if (!leaseId) return;
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      // Matches backend expectation: amount multiplied by 100 for Paystack kobo conversion check
+      await apiClient.post(`/payments/webhook`, {
+        event: "charge.success",
+        data: {
+          reference: `sim_ref_${Date.now()}`,
+          amount: totalPayment * 100, 
+          channel: "card",
+          metadata: {
+            lease_id: leaseId,
+            user_id: userId,
+          },
+          status: "success",
+        },
+      });
+
+      setStep(3);
+      onStateChange({
+        step: 3,
+        status: "completed",
+      });
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.detail || "Webhook simulation failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch Final Signed PDF Document
+  const handleFetchDocument = async () => {
+    if (!leaseId) return;
+    setLoading(true);
+    try {
+      const response = await apiClient.get(`/api/leases/${leaseId}/document`);
+      if (response.data?.signed_url) {
+        window.open(response.data.signed_url, "_blank");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.detail || "Document not yet available. Waiting for final processing.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="w-full max-w-[95%] bg-black/50 border border-[var(--amber)]/40 rounded-2xl p-4 space-y-4 text-xs text-slate-200 shadow-xl my-2">
+      <div className="flex justify-between items-center pb-2 border-b border-white/10">
+        <span className="font-bold text-[var(--amber)] uppercase tracking-wider flex items-center gap-1.5">
+          <FileText size={14} /> Lease Application & Signing
+        </span>
+        <span className="text-[10px] bg-[var(--amber)]/10 text-[var(--amber)] px-2 py-0.5 rounded-full font-mono">
+          {applicationStatus === "pending_approval" ? "Awaiting Review" : `Step ${step} of 3`}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-1 text-center text-[10px] font-semibold">
+        <div className={`py-1.5 rounded-lg border ${step === 1 && applicationStatus === "pending_approval" ? "bg-[var(--amber)]/15 border-[var(--amber)] text-[var(--amber)]" : "bg-white/5 border-emerald-500/30 text-emerald-400"}`}>
+          1. Apply & Sign
+        </div>
+        <div className={`py-1.5 rounded-lg border ${step === 2 ? "bg-[var(--amber)]/15 border-[var(--amber)] text-[var(--amber)]" : step > 2 ? "bg-white/5 border-emerald-500/30 text-emerald-400" : "bg-white/5 border-white/5 text-slate-500"}`}>
+          2. Payment
+        </div>
+        <div className={`py-1.5 rounded-lg border ${step === 3 ? "bg-[var(--amber)]/15 border-[var(--amber)] text-[var(--amber)]" : "bg-white/5 border-white/5 text-slate-500"}`}>
+          3. Confirm
+        </div>
+      </div>
+
+      {errorMsg && (
+        <div className="p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400">
+          {errorMsg}
+        </div>
+      )}
+
+      {/* Step 1 Form Submission */}
+      {step === 1 && !applicationId && (
+        <form onSubmit={handleApplyAndSign} className="space-y-3">
+          <div className="space-y-1">
+            <div className="flex justify-between items-center text-[11px]">
+              <label className="text-slate-300 font-medium">Proposed Start Date</label>
+              <span className="text-[var(--amber)] font-mono">Rent: ₦{totalPayment.toLocaleString()}</span>
+            </div>
+            <input
+              type="date"
+              required
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                onStateChange({ startDate: e.target.value });
+              }}
+              className="w-full rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-xs text-white focus:border-[var(--amber)] outline-none"
+            />
+          </div>
+
+          <div className="max-h-28 overflow-y-auto p-2.5 bg-black/40 border border-white/10 rounded-xl text-[11px] text-slate-300 leading-relaxed">
+            <p className="font-bold text-white mb-1">Residential Tenancy Terms</p>
+            By signing below, you commit to leasing this property starting from {startDate || "the specified date"} for the total amount of ₦{totalPayment.toLocaleString()}.
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] text-slate-300 font-medium flex items-center gap-1">
+              <PenTool size={12} className="text-[var(--amber)]" /> Type Full Legal Name (Signature)
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="John Doe"
+              value={renterSignature}
+              onChange={(e) => {
+                setRenterSignature(e.target.value);
+                onStateChange({ renterSignature: e.target.value });
+              }}
+              className="w-full rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-xs text-white focus:border-[var(--amber)] outline-none font-serif italic"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || !renterSignature.trim() || !startDate}
+            className="w-full py-2.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <>Submit Application & Sign <ShieldCheck size={14} /></>}
+          </button>
+        </form>
+      )}
+
+      {/* Waiting for Landlord Approval State */}
+      {step === 1 && applicationId && applicationStatus === "pending_approval" && (
+        <div className="space-y-3 text-center py-2">
+          <div className="w-10 h-10 rounded-full bg-[var(--amber)]/20 text-[var(--amber)] flex items-center justify-center mx-auto border border-[var(--amber)]/30">
+            <Loader2 size={20} className="animate-spin" />
+          </div>
+          <p className="text-xs font-bold text-white">Application Submitted Successfully</p>
+          <p className="text-[11px] text-slate-400">
+            Your application is awaiting landlord approval (`approved_pending_payment`). Click below to check status.
+          </p>
+          <button
+            onClick={handleCheckApprovalStatus}
+            disabled={loading}
+            className="w-full py-2.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5 text-xs"
+          >
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <>Check Approval Status</>}
+          </button>
+        </div>
+      )}
+
+      {/* Step 2: Unlocked upon approval — Initialize first, then simulate webhook */}
+      {step === 2 && (
+        <div className="space-y-3">
+          <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1.5 text-xs">
+            <div className="flex justify-between text-slate-400">
+              <span>Status</span>
+              <span className="text-emerald-400 font-mono">Landlord Approved</span>
+            </div>
+            <div className="flex justify-between text-slate-400">
+              <span>Total Property Rent</span>
+              <span className="text-white font-mono">₦{totalPayment.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {!paymentInitialized ? (
+            <button
+              onClick={handleInitializePayment}
+              disabled={loading}
+              className="w-full py-2.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5"
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <><CreditCard size={14} /> 1. Initialize Payment Metadata</>}
+            </button>
+          ) : (
+            <button
+              onClick={handleSimulateWebhook}
+              disabled={loading}
+              className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl transition flex items-center justify-center gap-1.5"
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <><CheckCircle2 size={14} /> 2. Simulate Payment Completed (Webhook)</>}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Step 3: Confirmation / Lease Completed */}
+      {step === 3 && (
+        <div className="space-y-3 text-center py-1">
+          <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/30">
+            <CheckCircle2 size={20} />
+          </div>
+          <p className="text-xs font-bold text-white">Payment Completed & Lease Active</p>
+          <p className="text-[11px] text-slate-400 font-mono">Lease ID: <span className="text-[var(--amber)]">{leaseId}</span></p>
+          <button
+            onClick={handleFetchDocument}
+            disabled={loading}
+            className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white border border-white/10 font-semibold rounded-xl transition flex items-center justify-center gap-1.5 text-xs"
+          >
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <><Download size={12} /> View Signed Lease PDF</>}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const ChatBox = ({
   onResults,
   loaderText: customLoaderText,
@@ -102,6 +443,8 @@ export const ChatBox = ({
   onResults?: (data: SearchProperty[]) => void;
   loaderText?: string;
 }) => {
+  const { user } = useAuth();
+
   const [isOpen, setIsOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     const saved = localStorage.getItem(STORAGE_KEY_OPEN);
@@ -129,7 +472,6 @@ export const ChatBox = ({
   const [loading, setLoading] = useState(false);
   const [activeLoaderText, setActiveLoaderText] = useState("Agent is thinking...");
 
-  // Interactive Form States inside Chat
   const [tourSelection, setTourSelection] = useState<{ date: string; time: string }>({ date: "", time: "" });
   const [leaseForm, setLeaseForm] = useState({ moveInDate: "", income: "", guarantor: "" });
   const [signature, setSignature] = useState("");
@@ -196,7 +538,7 @@ export const ChatBox = ({
       const properties = Array.isArray(propertiesPayload) ? propertiesPayload : [];
 
       const nestedBookTour = apiResponse?.data?.book_tour;
-      const nestedLeaseUi = apiResponse?.data?.lease_ui;
+      const nestedLeaseUi = apiResponse?.data?.lease_ui_ui || apiResponse?.data?.lease_ui;
 
       const assistantMessage: ChatMessage = {
         role: "assistant" as const,
@@ -212,7 +554,11 @@ export const ChatBox = ({
               message: nestedBookTour.message,
             }
           : apiResponse?.data?.tour_ui || undefined,
-        leaseUi: nestedLeaseUi || undefined,
+        leaseUi: nestedLeaseUi ? {
+          ui_component: nestedLeaseUi.ui_component || "lease_application_signer",
+          property_id: nestedLeaseUi.property_id,
+          ...nestedLeaseUi
+        } : undefined,
       };
 
       setMessages([...newMessages, assistantMessage]);
@@ -224,6 +570,22 @@ export const ChatBox = ({
     }
   };
 
+  const updateMessageLeaseState = (messageIndex: number, updatedFields: Partial<LeaseUiState>) => {
+    setMessages((prev) => {
+      const next = [...prev];
+      if (next[messageIndex] && next[messageIndex].leaseUi) {
+        next[messageIndex] = {
+          ...next[messageIndex],
+          leaseUi: {
+            ...next[messageIndex].leaseUi!,
+            ...updatedFields,
+          },
+        };
+      }
+      return next;
+    });
+  };
+
   const submitTourSelection = async () => {
     if (!tourSelection.date || !tourSelection.time) return;
     const messageText = `Please book a tour for ${tourSelection.date} at ${tourSelection.time}`;
@@ -231,7 +593,7 @@ export const ChatBox = ({
     setTourSelection({ date: "", time: "" });
   };
 
-  const handleActionClick = (actionType: "tour" | "view", property: SearchProperty) => {
+  const handleActionClick = (actionType: "tour" | "view" | "apply", property: SearchProperty) => {
     if (actionType === "tour") {
       const propertyContext = [
         `title=${property.title ?? "unknown"}`,
@@ -239,6 +601,15 @@ export const ChatBox = ({
         `full_address=${property.address_full ?? property.address ?? "unknown"}`,
       ].join(" | ");
       handleSend(`I want to schedule a tour for this property. ${propertyContext}`, {
+        propertyId: property.id,
+      });
+    } else if (actionType === "apply") {
+      const propertyContext = [
+        `title=${property.title ?? "unknown"}`,
+        `location=${property.address ?? "unknown"}`,
+        `property_id=${property.id ?? "unknown"}`,
+      ].join(" | ");
+      handleSend(`I want to start the lease application and signing process for this property. ${propertyContext}`, {
         propertyId: property.id,
       });
     } else {
@@ -329,11 +700,11 @@ export const ChatBox = ({
                     {renderMessageContent(m.content)}
                   </div>
 
-                  {/* 1. PROPERTY CARDS & ACTION BUTTONS */}
+                  {/* 1. PROPERTY CARDS & PER-PROPERTY ACTION BUTTONS */}
                   {m.role === "assistant" && m.properties && m.properties.length > 0 && (
-                    <div className="w-full max-w-[90%] space-y-2 pt-1">
+                    <div className="w-full max-w-[90%] space-y-2.5 pt-1">
                       {m.properties.map((prop, idx) => (
-                        <div key={prop.id || idx} className="bg-black/40 border border-white/10 rounded-2xl p-3 text-xs space-y-2">
+                        <div key={prop.id || idx} className="bg-black/40 border border-white/10 rounded-2xl p-3 text-xs space-y-2.5">
                           <div className="flex justify-between items-start gap-2">
                             <div>
                               <p className="font-semibold text-white">{prop.title || "Property Listing"}</p>
@@ -349,21 +720,31 @@ export const ChatBox = ({
                               </span>
                             )}
                           </div>
-                          <div className="flex gap-2 pt-1 border-t border-white/5">
-                            <button
-                              onClick={() => handleActionClick("tour", prop)}
-                              className="flex-1 py-1.5 px-2 bg-[var(--amber)]/15 border border-[var(--amber)]/30 rounded-xl text-[var(--amber)] font-medium text-[11px] hover:bg-[var(--amber)]/25 transition flex items-center justify-center gap-1"
-                            >
-                              <Calendar size={12} /> Book Tour
-                            </button>
-                            {prop.id && (
+                          
+                          {/* Action Buttons for Each Property */}
+                          <div className="space-y-1.5 pt-1 border-t border-white/5">
+                            <div className="flex gap-2">
                               <button
-                                onClick={() => handleActionClick("view", prop)}
-                                className="py-1.5 px-3 bg-white/5 border border-white/10 rounded-xl text-slate-300 font-medium text-[11px] hover:bg-white/10 transition flex items-center justify-center gap-1"
+                                onClick={() => handleActionClick("tour", prop)}
+                                className="flex-1 py-1.5 px-2 bg-[var(--amber)]/15 border border-[var(--amber)]/30 rounded-xl text-[var(--amber)] font-medium text-[11px] hover:bg-[var(--amber)]/25 transition flex items-center justify-center gap-1"
                               >
-                                <Eye size={12} /> View
+                                <Calendar size={12} /> Book Tour
                               </button>
-                            )}
+                              {prop.id && (
+                                <button
+                                  onClick={() => handleActionClick("view", prop)}
+                                  className="py-1.5 px-3 bg-white/5 border border-white/10 rounded-xl text-slate-300 font-medium text-[11px] hover:bg-white/10 transition flex items-center justify-center gap-1"
+                                >
+                                  <Eye size={12} /> View
+                                </button>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleActionClick("apply", prop)}
+                              className="w-full py-1.5 px-3 bg-[var(--amber)]/10 border border-[var(--amber)]/30 rounded-xl text-[var(--amber)] font-bold text-[11px] hover:bg-[var(--amber)]/20 transition flex items-center justify-center gap-1.5"
+                            >
+                              <FileText size={12} /> Apply for Lease Now
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -484,16 +865,19 @@ export const ChatBox = ({
                     </div>
                   )}
 
-                  {/* 7. INTELLIGENT NUDGE TRIGGER */}
-                  {m.role === "assistant" && m.properties && m.properties.length > 0 && (
-                    <div className="pl-2 pt-1 flex gap-2">
-                      <button
-                        onClick={() => handleSend(`I want to start the lease application for this property`)}
-                        className="text-[11px] font-bold text-[var(--amber)] bg-[var(--amber)]/10 border border-[var(--amber)]/20 px-3 py-1.5 rounded-full hover:bg-[var(--amber)]/20 transition flex items-center gap-1"
-                      >
-                        <FileText size={12} /> Apply for Lease Now
-                      </button>
-                    </div>
+                  {/* 7. INTERACTIVE INLINE LEASE SIGNER & FLOW WITH PERSISTENT STATE */}
+                  {m.role === "assistant" && m.leaseUi?.ui_component === "lease_application_signer" && m.leaseUi?.property_id && (
+                    <InlineLeaseWidget
+                      propertyId={m.leaseUi.property_id}
+                      initialAmount={
+                        m.leaseUi.amount ||
+                        messages.flatMap((msg) => msg.properties || []).find((p) => p.id === m.leaseUi?.property_id)?.price ||
+                        500000
+                      }
+                      leaseUi={m.leaseUi}
+                      onStateChange={(updatedFields) => updateMessageLeaseState(i, updatedFields)}
+                      userId={user?.id || ''}
+                    />
                   )}
                 </div>
               ))}

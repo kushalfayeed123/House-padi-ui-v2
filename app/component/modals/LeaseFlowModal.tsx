@@ -1,42 +1,45 @@
 "use client";
-
-import { useState } from "react";
-import { X, CheckCircle2, ShieldCheck, CreditCard, PenTool, FileText, ArrowRight, Loader2, Download, ExternalLink } from "lucide-react";
+import React, { useState } from 'react';
+import { X, CheckCircle2, ShieldCheck, CreditCard, PenTool, FileText, Loader2, Download } from "lucide-react";
 import { Property } from "@/app/types/property";
 import { apiClient } from "@/app/lib/api-client";
-
-
 interface LeaseFlowModalProps {
   isOpen: boolean;
   onClose: () => void;
-  property: Property;
+  propertyId: string;
+  initialAmount?: number;
+  leaseUi?: any;
+  onStateChange: (updated: any) => void;
+  userId: string;
 }
 
 export const LeaseFlowModal = ({
   isOpen,
   onClose,
-  property,
+  propertyId,
+  initialAmount = 500000,
+  leaseUi,
+  onStateChange,
+  userId,
 }: LeaseFlowModalProps) => {
+  if (!isOpen) return null;
 
-  
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(leaseUi?.step || 1);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Form states matching backend schemas
-  const [startDate, setStartDate] = useState("");
-  const [renterSignature, setRenterSignature] = useState("");
-  const [applicationId, setApplicationId] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState(leaseUi?.startDate || "");
+  const [renterSignature, setRenterSignature] = useState(leaseUi?.renterSignature || "");
+  const [applicationId, setApplicationId] = useState<string | null>(leaseUi?.applicationId || null);
+  const [leaseId, setLeaseId] = useState<string | undefined>(leaseUi?.lease_id || undefined);
+  const [applicationStatus, setApplicationStatus] = useState<string>(leaseUi?.status || "pending_approval");
+  
+  // Payment states
+  const [paymentInitialized, setPaymentInitialized] = useState(false);
 
-  // Payment checkout response metadata
-  const [checkoutData, setCheckoutData] = useState<any>(null);
-  const [signedDocUrl, setSignedDocUrl] = useState<string | null>(null);
+  const totalPayment = initialAmount;
 
-  if (!isOpen) return null;
-
-  const totalPayment = property.price + property.price * 0.1; // Rent + Caution Deposit
-
-  // Step 1: Submit Application + Renter Signature
+  // Step 1: Submit Application & Digital Signature
   const handleApplyAndSign = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -44,17 +47,29 @@ export const LeaseFlowModal = ({
 
     try {
       const response = await apiClient.post(
-        `api/applications/properties/${property.id}/apply`,
+        `/api/applications/properties/${propertyId}/apply`,
         {
           renter_signature: renterSignature,
           start_date: startDate,
         }
       );
+      
+      const responseData = response.data?.data || response.data;
+      const returnedLeaseId = responseData.lease_id;
+      const returnedAppId = responseData.application_id;
 
-      // Extract lease/application identifier from response message or payload
-      const returnedId = response.data?.lease_id || response.data?.application_id || "APP-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-      setApplicationId(returnedId);
-      setStep(2);
+      setLeaseId(returnedLeaseId);
+      setApplicationId(returnedAppId);
+      setApplicationStatus("pending_approval");
+      
+      onStateChange({
+        step: 1,
+        startDate,
+        renterSignature,
+        applicationId: returnedAppId,
+        lease_id: returnedLeaseId,
+        status: "pending_approval",
+      });
     } catch (err: any) {
       setErrorMsg(err.response?.data?.detail || "Failed to submit application.");
     } finally {
@@ -62,20 +77,55 @@ export const LeaseFlowModal = ({
     }
   };
 
-  // Step 2: Initialize Lease Payment Checkout
-  const handleInitializePayment = async () => {
-    if (!applicationId) return;
+  // Check Landlord Approval Status
+  const handleCheckApprovalStatus = async () => {
+    if (!applicationId && !leaseId) return;
     setLoading(true);
     setErrorMsg(null);
 
     try {
-      const response = await apiClient.post("/payments/initialize", {
-        lease_id: applicationId,
+      const response = await apiClient.get(`/api/applications/${applicationId}`);
+      
+      const resData = response.data?.data || response.data;
+      const currentStatus = resData.status;
+
+      setApplicationStatus(currentStatus);
+
+      if (currentStatus === "approved_pending_payment") {
+        setStep(2);
+        onStateChange({
+          step: 2,
+          status: "approved_pending_payment",
+        });
+      } else if (currentStatus === "completed" || currentStatus === "active") {
+        setStep(3);
+        onStateChange({
+          step: 3,
+          status: "completed",
+        });
+      } else {
+        setErrorMsg("Application is still pending landlord review. Please check back shortly.");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.detail || "Failed to fetch application status.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step A (Payment): Initialize Payment first (/payments/initialize)
+  const handleInitializePayment = async () => {
+    if (!leaseId) return;
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      await apiClient.post("/payments/initialize", {
+        lease_id: leaseId,
         amount: totalPayment,
       });
 
-      setCheckoutData(response.data?.checkout_metadata || response.data);
-      setStep(3);
+      setPaymentInitialized(true);
     } catch (err: any) {
       setErrorMsg(err.response?.data?.detail || "Payment initialization failed.");
     } finally {
@@ -83,168 +133,213 @@ export const LeaseFlowModal = ({
     }
   };
 
-  // Optional: Fetch Active Signed Document
+  // Step B (Payment): Simulate Payment Webhook after initialization (/payments/webhook)
+  const handleSimulateWebhook = async () => {
+    if (!leaseId) return;
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      await apiClient.post(`/payments/webhook`, {
+        event: "charge.success",
+        data: {
+          reference: `sim_ref_${Date.now()}`,
+          amount: totalPayment * 100, 
+          channel: "card",
+          metadata: {
+            lease_id: leaseId,
+            user_id: userId,
+          },
+          status: "success",
+        },
+      });
+
+      setStep(3);
+      onStateChange({
+        step: 3,
+        status: "completed",
+      });
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.detail || "Webhook simulation failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch Final Signed PDF Document
   const handleFetchDocument = async () => {
-    if (!applicationId) return;
+    if (!leaseId) return;
     setLoading(true);
     try {
-      const response = await apiClient.get(`api/leases/${applicationId}/document`);
+      const response = await apiClient.get(`/api/leases/${leaseId}/document`);
       if (response.data?.signed_url) {
-        setSignedDocUrl(response.data.signed_url);
         window.open(response.data.signed_url, "_blank");
       }
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || "Document not yet available. Waiting for landlord approval/activation.");
+      setErrorMsg(err.response?.data?.detail || "Document not yet available. Waiting for final processing.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="relative w-full max-w-xl bg-[var(--ink-soft)] border border-white/10 rounded-3xl p-6 md:p-8 space-y-6 shadow-2xl">
-        {/* Modal Header */}
-        <div className="flex justify-between items-center pb-4 border-b border-white/10">
-          <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <FileText className="text-[var(--amber)]" size={20} />
-              Lease Application & Signing
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">{property.title}</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-slate-400 hover:text-white">
-            <X size={18} />
-          </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-lg bg-black/90 border border-[var(--amber)]/40 rounded-2xl p-5 space-y-4 text-xs text-slate-200 shadow-2xl relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-white transition"
+        >
+          <X size={18} />
+        </button>
+
+        <div className="flex justify-between items-center pb-3 border-b border-white/10 pr-6">
+          <span className="font-bold text-[var(--amber)] uppercase tracking-wider flex items-center gap-1.5 text-sm">
+            <FileText size={16} /> Lease Application & Signing
+          </span>
+          <span className="text-[11px] bg-[var(--amber)]/10 text-[var(--amber)] px-2.5 py-0.5 rounded-full font-mono">
+            {applicationStatus === "pending_approval" ? "Awaiting Review" : `Step ${step} of 3`}
+          </span>
         </div>
 
-        {/* Stepper Header */}
         <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
-          <div className={`py-2 rounded-xl border ${step === 1 ? "bg-[var(--amber)]/10 border-[var(--amber)] text-[var(--amber)]" : "bg-white/5 border-emerald-500/30 text-emerald-400"}`}>
+          <div className={`py-2 rounded-lg border ${step === 1 && applicationStatus === "pending_approval" ? "bg-[var(--amber)]/15 border-[var(--amber)] text-[var(--amber)]" : "bg-white/5 border-emerald-500/30 text-emerald-400"}`}>
             1. Apply & Sign
           </div>
-          <div className={`py-2 rounded-xl border ${step === 2 ? "bg-[var(--amber)]/10 border-[var(--amber)] text-[var(--amber)]" : step > 2 ? "bg-white/5 border-emerald-500/30 text-emerald-400" : "bg-white/5 border-white/5 text-slate-500"}`}>
-            2. Payment Setup
+          <div className={`py-2 rounded-lg border ${step === 2 ? "bg-[var(--amber)]/15 border-[var(--amber)] text-[var(--amber)]" : step > 2 ? "bg-white/5 border-emerald-500/30 text-emerald-400" : "bg-white/5 border-white/5 text-slate-500"}`}>
+            2. Payment
           </div>
-          <div className={`py-2 rounded-xl border ${step === 3 ? "bg-[var(--amber)]/10 border-[var(--amber)] text-[var(--amber)]" : "bg-white/5 border-white/5 text-slate-500"}`}>
-            3. Confirmation
+          <div className={`py-2 rounded-lg border ${step === 3 ? "bg-[var(--amber)]/15 border-[var(--amber)] text-[var(--amber)]" : "bg-white/5 border-white/5 text-slate-500"}`}>
+            3. Confirm
           </div>
         </div>
 
         {errorMsg && (
-          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400">
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400">
             {errorMsg}
           </div>
         )}
 
-        {/* STEP 1: APPLY & SIGN */}
-        {step === 1 && (
+        {/* Step 1 Form Submission */}
+        {step === 1 && !applicationId && (
           <form onSubmit={handleApplyAndSign} className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-xs text-slate-300 font-medium">Proposed Start Date</label>
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-xs">
+                <label className="text-slate-300 font-medium">Proposed Start Date</label>
+                <span className="text-[var(--amber)] font-mono">Rent: ₦{totalPayment.toLocaleString()}</span>
+              </div>
               <input
                 type="date"
                 required
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 text-sm text-white focus:border-[var(--amber)] outline-none"
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  onStateChange({ startDate: e.target.value });
+                }}
+                className="w-full rounded-xl border border-white/10 bg-black/50 px-3.5 py-2.5 text-xs text-white focus:border-[var(--amber)] outline-none"
               />
             </div>
 
-            <div className="max-h-36 overflow-y-auto p-3.5 bg-black/40 border border-white/10 rounded-2xl text-xs text-slate-300 space-y-1.5 leading-relaxed">
-              <h4 className="font-bold text-white uppercase text-[10px]">Residential Tenancy Terms</h4>
-              <p>By executing this signature, you commit to leasing <strong>{property.title}</strong> starting from {startDate || "the specified date"}. Rent: {property.currency}{property.price.toLocaleString()} annually.</p>
+            <div className="max-h-32 overflow-y-auto p-3 bg-black/40 border border-white/10 rounded-xl text-xs text-slate-300 leading-relaxed">
+              <p className="font-bold text-white mb-1">Residential Tenancy Terms</p>
+              By signing below, you commit to leasing this property starting from {startDate || "the specified date"} for the total amount of ₦{totalPayment.toLocaleString()}.
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
-                <PenTool size={14} className="text-[var(--amber)]" /> Type Full Legal Name (Renter Signature)
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-300 font-medium flex items-center gap-1">
+                <PenTool size={13} className="text-[var(--amber)]" /> Type Full Legal Name (Signature)
               </label>
               <input
                 type="text"
                 required
                 placeholder="John Doe"
                 value={renterSignature}
-                onChange={(e) => setRenterSignature(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 text-sm text-white focus:border-[var(--amber)] outline-none font-serif italic text-base"
+                onChange={(e) => {
+                  setRenterSignature(e.target.value);
+                  onStateChange({ renterSignature: e.target.value });
+                }}
+                className="w-full rounded-xl border border-white/10 bg-black/50 px-3.5 py-2.5 text-xs text-white focus:border-[var(--amber)] outline-none font-serif italic"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading || !renterSignature.trim() || !startDate}
-              className="w-full py-3 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-3 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50 text-xs"
             >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <>Submit Application & Execute Signature <ShieldCheck size={16} /></>}
+              {loading ? <Loader2 size={15} className="animate-spin" /> : <>Submit Application & Sign <ShieldCheck size={15} /></>}
             </button>
           </form>
         )}
 
-        {/* STEP 2: INITIALIZE PAYMENT */}
-        {step === 2 && (
-          <div className="space-y-5">
-            <div className="p-4 bg-white/5 border border-white/10 rounded-2xl space-y-2 text-xs">
-              <div className="flex justify-between text-slate-400">
-                <span>Annual Rent</span>
-                <span className="text-white font-mono">{property.currency}{property.price.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Caution Deposit (10%)</span>
-                <span className="text-white font-mono">{property.currency}{(property.price * 0.1).toLocaleString()}</span>
-              </div>
-              <div className="border-t border-white/10 pt-2 flex justify-between font-bold text-sm text-[var(--amber)] font-mono">
-                <span>Total Due</span>
-                <span>{property.currency}{totalPayment.toLocaleString()}</span>
-              </div>
+        {/* Waiting for Landlord Approval State */}
+        {step === 1 && applicationId && applicationStatus === "pending_approval" && (
+          <div className="space-y-4 text-center py-4">
+            <div className="w-12 h-12 rounded-full bg-[var(--amber)]/20 text-[var(--amber)] flex items-center justify-center mx-auto border border-[var(--amber)]/30">
+              <Loader2 size={22} className="animate-spin" />
             </div>
-
+            <p className="text-xs font-bold text-white">Application Submitted Successfully</p>
+            <p className="text-xs text-slate-400">
+              Your application is awaiting landlord approval (`approved_pending_payment`). Click below to check status.
+            </p>
             <button
-              onClick={handleInitializePayment}
+              onClick={handleCheckApprovalStatus}
               disabled={loading}
-              className="w-full py-3 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl text-xs transition flex items-center justify-center gap-2"
+              className="w-full py-3 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5 text-xs"
             >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <><CreditCard size={16} /> Initialize Gateway Checkout</>}
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <>Check Approval Status</>}
             </button>
           </div>
         )}
 
-        {/* STEP 3: CHECKOUT READY & CONTRACT LINK */}
-        {step === 3 && (
-          <div className="text-center space-y-4 py-2">
-            <div className="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/30">
-              <CheckCircle2 size={32} />
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-white">Application Submitted Successfully</h3>
-              <p className="text-xs text-slate-400">
-                Proceed to completed payment or view your generated lease agreement when active.
-              </p>
-            </div>
-
-            {checkoutData && (
-              <div className="p-3 bg-black/40 border border-white/10 rounded-2xl text-left space-y-1 font-mono text-xs">
-                <p className="text-slate-400">Lease ID: <span className="text-[var(--amber)]">{applicationId}</span></p>
-                <p className="text-slate-400">Payer Email: <span className="text-white">{checkoutData.email || "N/A"}</span></p>
-                <p className="text-slate-400">Amount: <span className="text-emerald-400">{property.currency}{checkoutData.amount?.toLocaleString()}</span></p>
+        {/* Step 2: Unlocked upon approval — Initialize first, then simulate webhook */}
+        {step === 2 && (
+          <div className="space-y-4 py-2">
+            <div className="p-3.5 bg-white/5 border border-white/10 rounded-xl space-y-2 text-xs">
+              <div className="flex justify-between text-slate-400">
+                <span>Status</span>
+                <span className="text-emerald-400 font-mono">Landlord Approved</span>
               </div>
-            )}
-
-            <div className="flex flex-col gap-2 pt-2">
-              <button
-                onClick={handleFetchDocument}
-                disabled={loading}
-                className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white border border-white/10 font-semibold rounded-xl text-xs transition flex items-center justify-center gap-2"
-              >
-                {loading ? <Loader2 size={14} className="animate-spin" /> : <><Download size={14} /> View Signed Lease PDF (/leases/document)</>}
-              </button>
-
-              <button
-                onClick={onClose}
-                className="w-full py-2.5 bg-[var(--amber)] text-[var(--ink)] font-bold rounded-xl text-xs transition"
-              >
-                Done
-              </button>
+              <div className="flex justify-between text-slate-400">
+                <span>Total Property Rent</span>
+                <span className="text-white font-mono">₦{totalPayment.toLocaleString()}</span>
+              </div>
             </div>
+
+            {!paymentInitialized ? (
+              <button
+                onClick={handleInitializePayment}
+                disabled={loading}
+                className="w-full py-3 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5 text-xs"
+              >
+                {loading ? <Loader2 size={15} className="animate-spin" /> : <><CreditCard size={15} /> 1. Initialize Payment Metadata</>}
+              </button>
+            ) : (
+              <button
+                onClick={handleSimulateWebhook}
+                disabled={loading}
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl transition flex items-center justify-center gap-1.5 text-xs"
+              >
+                {loading ? <Loader2 size={15} className="animate-spin" /> : <><CheckCircle2 size={15} /> 2. Simulate Payment Completed (Webhook)</>}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Step 3: Confirmation / Lease Completed */}
+        {step === 3 && (
+          <div className="space-y-4 text-center py-3">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/30">
+              <CheckCircle2 size={24} />
+            </div>
+            <p className="text-xs font-bold text-white">Payment Completed & Lease Active</p>
+            <p className="text-xs text-slate-400 font-mono">Lease ID: <span className="text-[var(--amber)]">{leaseId}</span></p>
+            <button
+              onClick={handleFetchDocument}
+              disabled={loading}
+              className="w-full py-3 bg-white/10 hover:bg-white/15 text-white border border-white/10 font-semibold rounded-xl transition flex items-center justify-center gap-1.5 text-xs"
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <><Download size={14} /> View Signed Lease PDF</>}
+            </button>
           </div>
         )}
       </div>

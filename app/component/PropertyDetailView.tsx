@@ -7,6 +7,10 @@ import { EditPropertyModal } from "./modals/EditPropertyModal";
 import { LeaseFlowModal } from "./modals/LeaseFlowModal";
 import { ChevronLeft, ChevronRight, MapPin, ArrowLeft, Building, LayoutGrid, CalendarDays, FileCheck, Bot } from "lucide-react";
 import { apiClient } from "../lib/api-client";
+import { useAuth } from "../context/AuthContext";
+
+
+
 
 interface PropertyDetailsViewProps {
   property: Property;
@@ -26,6 +30,9 @@ export const PropertyDetailsView = ({
   const [tourSelection, setTourSelection] = useState<{ date: string; time: string }>({ date: "", time: "" });
   const [tourStatus, setTourStatus] = useState<string | null>(null);
   const [isSubmittingTour, setIsSubmittingTour] = useState(false);
+
+  const { user } = useAuth();
+  
 
   const nextImage = () => setCurrentIdx((prev) => (prev + 1) % property.images.length);
   const prevImage = () => setCurrentIdx((prev) => (prev - 1 + property.images.length) % property.images.length);
@@ -239,7 +246,11 @@ export const PropertyDetailsView = ({
       <LeaseFlowModal
         isOpen={isLeaseModalOpen}
         onClose={() => setIsLeaseModalOpen(false)}
-        property={property}
+        propertyId={property.id}
+        onStateChange={function (updated: any): void {
+          throw new Error("Function not implemented.");
+        } }
+        userId={user.id || ''}        
       />
     </div>
   );

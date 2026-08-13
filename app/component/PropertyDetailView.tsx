@@ -59,7 +59,7 @@ export const PropertyDetailsView = ({
   };
 
   const handleFetchDocument = async () => {
-    const leaseId = property.lease_id;
+    const leaseId = property.id;
     if (!leaseId) return;
 
     setIsLoadingDoc(true);
@@ -245,7 +245,7 @@ export const PropertyDetailsView = ({
                         <div className="text-sm font-semibold text-white">
                           {property.renter 
                             ? `${property.renter.first_name} ${property.renter.last_name}` 
-                            : (property.renter_name || property.tenant_name || "Verified Tenant")}
+                            : "Verified Tenant"}
                         </div>
                         {property.renter?.email && (
                           <p className="text-xs text-slate-400">{property.renter.email}</p>
@@ -257,7 +257,7 @@ export const PropertyDetailsView = ({
                     </div>
                     <button
                       onClick={handleFetchDocument}
-                      disabled={isLoadingDoc || !property.lease_id}
+                      disabled={isLoadingDoc || !property.id}
                       className="w-full py-3 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoadingDoc ? <Loader2 size={16} className="animate-spin" /> : <FileCheck size={16} />} 

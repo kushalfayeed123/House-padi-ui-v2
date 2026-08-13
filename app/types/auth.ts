@@ -23,6 +23,7 @@ export interface AuthResponse {
   return_url?: string | null;
   redirect_url?: string | null;
   user: {
+    user_metadata: any;
     id: string;
     email: string;
     profile: UserProfile;

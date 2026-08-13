@@ -20,8 +20,11 @@ export const AuthModal = ({ onClose }: { onClose: () => void }) => {
       setUser({
         id: response.user.id,
         email: response.user.email,
-        full_name: response.user.user_metadata?.full_name || `${formData.first_name} ${formData.last_name}`,
+        first_name: response.user.user_metadata?.first_name || formData.first_name,
+        last_name: response.user.user_metadata?.last_name || formData.last_name,
         role: response.user.user_metadata?.role || "renter",
+        avatar_url: "",
+        created_at: ""
       });
       onClose();
     } catch (err) {

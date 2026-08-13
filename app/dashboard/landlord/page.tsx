@@ -1,4 +1,4 @@
-import { LandlordDashboard } from "@/app/dashboard/landlord/LandLordDashboard";
+import { LandlordDashboard } from "./LandLordDashboard";
 
 export default function LandlordDashboardPage() {
   return <LandlordDashboard />;

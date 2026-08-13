@@ -22,7 +22,6 @@ import { useRouter } from "next/navigation";
 import { apiClient } from "@/app/lib/api-client";
 import { useAuth } from "../../context/AuthContext";
 
-
 const STORAGE_KEY_MESSAGES = "housepadi_chat_messages";
 const STORAGE_KEY_THREAD = "housepadi_thread_id";
 const STORAGE_KEY_OPEN = "housepadi_chat_open";
@@ -39,7 +38,12 @@ type SearchProperty = {
 };
 
 type LeaseUiState = {
-  ui_component: "application_form" | "signature_pad" | "payment_gateway" | "lease_completed" | "lease_application_signer";
+  ui_component:
+    | "application_form"
+    | "signature_pad"
+    | "payment_gateway"
+    | "lease_completed"
+    | "lease_application_signer";
   lease_id?: string;
   property_id?: string;
   amount?: number;
@@ -69,15 +73,41 @@ type ChatMessage = {
   leaseUi?: LeaseUiState;
 };
 
-
-
 const getActionLoaderText = (text: string): string => {
   const lower = text.toLowerCase();
-  if (lower.includes("tour") || lower.includes("schedule") || lower.includes("visit")) return "Scheduling tour...";
-  if (lower.includes("lease") || lower.includes("sign") || lower.includes("apply") || lower.includes("agreement")) return "Processing lease details...";
-  if (lower.includes("pay") || lower.includes("wallet") || lower.includes("deposit")) return "Preparing payment request...";
-  if (lower.includes("kyc") || lower.includes("verify") || lower.includes("identity")) return "Verifying identity status...";
-  if (lower.includes("search") || lower.includes("find") || lower.includes("rent") || lower.includes("house") || lower.includes("apartment")) return "Searching property listings...";
+  if (
+    lower.includes("tour") ||
+    lower.includes("schedule") ||
+    lower.includes("visit")
+  )
+    return "Scheduling tour...";
+  if (
+    lower.includes("lease") ||
+    lower.includes("sign") ||
+    lower.includes("apply") ||
+    lower.includes("agreement")
+  )
+    return "Processing lease details...";
+  if (
+    lower.includes("pay") ||
+    lower.includes("wallet") ||
+    lower.includes("deposit")
+  )
+    return "Preparing payment request...";
+  if (
+    lower.includes("kyc") ||
+    lower.includes("verify") ||
+    lower.includes("identity")
+  )
+    return "Verifying identity status...";
+  if (
+    lower.includes("search") ||
+    lower.includes("find") ||
+    lower.includes("rent") ||
+    lower.includes("house") ||
+    lower.includes("apartment")
+  )
+    return "Searching property listings...";
   return "HousePadi Agent is thinking...";
 };
 
@@ -90,19 +120,38 @@ const renderMessageContent = (content: string): ReactNode[] => {
   while ((match = urlRegex.exec(content)) !== null) {
     const start = match.index;
     const rawUrl = match[0];
-    if (start > lastIndex) fragments.push(<span key={`text-${lastIndex}`}>{content.slice(lastIndex, start)}</span>);
-    const href = rawUrl.startsWith("http://") || rawUrl.startsWith("https://") ? rawUrl : `https://${rawUrl}`;
+    if (start > lastIndex)
+      fragments.push(
+        <span key={`text-${lastIndex}`}>
+          {content.slice(lastIndex, start)}
+        </span>,
+      );
+    const href =
+      rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
+        ? rawUrl
+        : `https://${rawUrl}`;
     fragments.push(
-      <a key={`link-${start}`} href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-[var(--amber)] underline underline-offset-2 break-all hover:text-[var(--amber-soft)]">
+      <a
+        key={`link-${start}`}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 font-medium text-[var(--amber)] underline underline-offset-2 break-all hover:text-[var(--amber-soft)]"
+      >
         <span>{rawUrl}</span>
         <span className="text-[10px]">↗</span>
-      </a>
+      </a>,
     );
     lastIndex = start + rawUrl.length;
   }
 
-  if (lastIndex < content.length) fragments.push(<span key={`text-${lastIndex}`}>{content.slice(lastIndex)}</span>);
-  return fragments.length > 0 ? fragments : [<span key="empty">{content}</span>];
+  if (lastIndex < content.length)
+    fragments.push(
+      <span key={`text-${lastIndex}`}>{content.slice(lastIndex)}</span>,
+    );
+  return fragments.length > 0
+    ? fragments
+    : [<span key="empty">{content}</span>];
 };
 
 // Interactive Inline Lease Flow Widget with persistent state synchronization
@@ -125,11 +174,19 @@ const InlineLeaseWidget = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [startDate, setStartDate] = useState(leaseUi?.startDate || "");
-  const [renterSignature, setRenterSignature] = useState(leaseUi?.renterSignature || "");
-  const [applicationId, setApplicationId] = useState<string | null>(leaseUi?.applicationId || null);
-  const [leaseId, setLeaseId] = useState<string | undefined>(leaseUi?.lease_id || undefined);
-  const [applicationStatus, setApplicationStatus] = useState<string>(leaseUi?.status || "pending_approval");
-  
+  const [renterSignature, setRenterSignature] = useState(
+    leaseUi?.renterSignature || "",
+  );
+  const [applicationId, setApplicationId] = useState<string | null>(
+    leaseUi?.applicationId || null,
+  );
+  const [leaseId, setLeaseId] = useState<string | undefined>(
+    leaseUi?.lease_id || undefined,
+  );
+  const [applicationStatus, setApplicationStatus] = useState<string>(
+    leaseUi?.status || "pending_approval",
+  );
+
   // Payment states
   const [paymentInitialized, setPaymentInitialized] = useState(false);
 
@@ -147,9 +204,9 @@ const InlineLeaseWidget = ({
         {
           renter_signature: renterSignature,
           start_date: startDate,
-        }
+        },
       );
-      
+
       const responseData = response.data?.data || response.data;
       const returnedLeaseId = responseData.lease_id;
       const returnedAppId = responseData.application_id;
@@ -157,7 +214,7 @@ const InlineLeaseWidget = ({
       setLeaseId(returnedLeaseId);
       setApplicationId(returnedAppId);
       setApplicationStatus("pending_approval");
-      
+
       onStateChange({
         step: 1,
         startDate,
@@ -167,7 +224,9 @@ const InlineLeaseWidget = ({
         status: "pending_approval",
       });
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || "Failed to submit application.");
+      setErrorMsg(
+        err.response?.data?.detail || "Failed to submit application.",
+      );
     } finally {
       setLoading(false);
     }
@@ -180,8 +239,10 @@ const InlineLeaseWidget = ({
     setErrorMsg(null);
 
     try {
-      const response = await apiClient.get(`/api/applications/${applicationId}`);
-      
+      const response = await apiClient.get(
+        `/api/applications/${applicationId}`,
+      );
+
       const resData = response.data?.data || response.data;
       const currentStatus = resData.status;
 
@@ -200,10 +261,14 @@ const InlineLeaseWidget = ({
           status: "completed",
         });
       } else {
-        setErrorMsg("Application is still pending landlord review. Please check back shortly.");
+        setErrorMsg(
+          "Application is still pending landlord review. Please check back shortly.",
+        );
       }
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || "Failed to fetch application status.");
+      setErrorMsg(
+        err.response?.data?.detail || "Failed to fetch application status.",
+      );
     } finally {
       setLoading(false);
     }
@@ -223,7 +288,9 @@ const InlineLeaseWidget = ({
 
       setPaymentInitialized(true);
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || "Payment initialization failed.");
+      setErrorMsg(
+        err.response?.data?.detail || "Payment initialization failed.",
+      );
     } finally {
       setLoading(false);
     }
@@ -231,7 +298,6 @@ const InlineLeaseWidget = ({
 
   // Step B (Payment): Simulate Payment Webhook after initialization (/payments/webhook)
   const handleSimulateWebhook = async () => {
-    
     if (!leaseId) return;
     setLoading(true);
     setErrorMsg(null);
@@ -242,7 +308,7 @@ const InlineLeaseWidget = ({
         event: "charge.success",
         data: {
           reference: `sim_ref_${Date.now()}`,
-          amount: totalPayment * 100, 
+          amount: totalPayment * 100,
           channel: "card",
           metadata: {
             lease_id: leaseId,
@@ -274,7 +340,10 @@ const InlineLeaseWidget = ({
         window.open(response.data.signed_url, "_blank");
       }
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || "Document not yet available. Waiting for final processing.");
+      setErrorMsg(
+        err.response?.data?.detail ||
+          "Document not yet available. Waiting for final processing.",
+      );
     } finally {
       setLoading(false);
     }
@@ -287,18 +356,26 @@ const InlineLeaseWidget = ({
           <FileText size={14} /> Lease Application & Signing
         </span>
         <span className="text-[10px] bg-[var(--amber)]/10 text-[var(--amber)] px-2 py-0.5 rounded-full font-mono">
-          {applicationStatus === "pending_approval" ? "Awaiting Review" : `Step ${step} of 3`}
+          {applicationStatus === "pending_approval"
+            ? "Awaiting Review"
+            : `Step ${step} of 3`}
         </span>
       </div>
 
       <div className="grid grid-cols-3 gap-1 text-center text-[10px] font-semibold">
-        <div className={`py-1.5 rounded-lg border ${step === 1 && applicationStatus === "pending_approval" ? "bg-[var(--amber)]/15 border-[var(--amber)] text-[var(--amber)]" : "bg-white/5 border-emerald-500/30 text-emerald-400"}`}>
+        <div
+          className={`py-1.5 rounded-lg border ${step === 1 && applicationStatus === "pending_approval" ? "bg-[var(--amber)]/15 border-[var(--amber)] text-[var(--amber)]" : "bg-white/5 border-emerald-500/30 text-emerald-400"}`}
+        >
           1. Apply & Sign
         </div>
-        <div className={`py-1.5 rounded-lg border ${step === 2 ? "bg-[var(--amber)]/15 border-[var(--amber)] text-[var(--amber)]" : step > 2 ? "bg-white/5 border-emerald-500/30 text-emerald-400" : "bg-white/5 border-white/5 text-slate-500"}`}>
+        <div
+          className={`py-1.5 rounded-lg border ${step === 2 ? "bg-[var(--amber)]/15 border-[var(--amber)] text-[var(--amber)]" : step > 2 ? "bg-white/5 border-emerald-500/30 text-emerald-400" : "bg-white/5 border-white/5 text-slate-500"}`}
+        >
           2. Payment
         </div>
-        <div className={`py-1.5 rounded-lg border ${step === 3 ? "bg-[var(--amber)]/15 border-[var(--amber)] text-[var(--amber)]" : "bg-white/5 border-white/5 text-slate-500"}`}>
+        <div
+          className={`py-1.5 rounded-lg border ${step === 3 ? "bg-[var(--amber)]/15 border-[var(--amber)] text-[var(--amber)]" : "bg-white/5 border-white/5 text-slate-500"}`}
+        >
           3. Confirm
         </div>
       </div>
@@ -314,8 +391,12 @@ const InlineLeaseWidget = ({
         <form onSubmit={handleApplyAndSign} className="space-y-3">
           <div className="space-y-1">
             <div className="flex justify-between items-center text-[11px]">
-              <label className="text-slate-300 font-medium">Proposed Start Date</label>
-              <span className="text-[var(--amber)] font-mono">Rent: ₦{totalPayment.toLocaleString()}</span>
+              <label className="text-slate-300 font-medium">
+                Proposed Start Date
+              </label>
+              <span className="text-[var(--amber)] font-mono">
+                Rent: ₦{totalPayment.toLocaleString()}
+              </span>
             </div>
             <input
               type="date"
@@ -330,13 +411,18 @@ const InlineLeaseWidget = ({
           </div>
 
           <div className="max-h-28 overflow-y-auto p-2.5 bg-black/40 border border-white/10 rounded-xl text-[11px] text-slate-300 leading-relaxed">
-            <p className="font-bold text-white mb-1">Residential Tenancy Terms</p>
-            By signing below, you commit to leasing this property starting from {startDate || "the specified date"} for the total amount of ₦{totalPayment.toLocaleString()}.
+            <p className="font-bold text-white mb-1">
+              Residential Tenancy Terms
+            </p>
+            By signing below, you commit to leasing this property starting from{" "}
+            {startDate || "the specified date"} for the total amount of ₦
+            {totalPayment.toLocaleString()}.
           </div>
 
           <div className="space-y-1">
             <label className="text-[11px] text-slate-300 font-medium flex items-center gap-1">
-              <PenTool size={12} className="text-[var(--amber)]" /> Type Full Legal Name (Signature)
+              <PenTool size={12} className="text-[var(--amber)]" /> Type Full
+              Legal Name (Signature)
             </label>
             <input
               type="text"
@@ -356,30 +442,45 @@ const InlineLeaseWidget = ({
             disabled={loading || !renterSignature.trim() || !startDate}
             className="w-full py-2.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50"
           >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <>Submit Application & Sign <ShieldCheck size={14} /></>}
+            {loading ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <>
+                Submit Application & Sign <ShieldCheck size={14} />
+              </>
+            )}
           </button>
         </form>
       )}
 
       {/* Waiting for Landlord Approval State */}
-      {step === 1 && applicationId && applicationStatus === "pending_approval" && (
-        <div className="space-y-3 text-center py-2">
-          <div className="w-10 h-10 rounded-full bg-[var(--amber)]/20 text-[var(--amber)] flex items-center justify-center mx-auto border border-[var(--amber)]/30">
-            <Loader2 size={20} className="animate-spin" />
+      {step === 1 &&
+        applicationId &&
+        applicationStatus === "pending_approval" && (
+          <div className="space-y-3 text-center py-2">
+            <div className="w-10 h-10 rounded-full bg-[var(--amber)]/20 text-[var(--amber)] flex items-center justify-center mx-auto border border-[var(--amber)]/30">
+              <Loader2 size={20} className="animate-spin" />
+            </div>
+            <p className="text-xs font-bold text-white">
+              Application Submitted Successfully
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Your application is awaiting landlord approval
+              (`approved_pending_payment`). Click below to check status.
+            </p>
+            <button
+              onClick={handleCheckApprovalStatus}
+              disabled={loading}
+              className="w-full py-2.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5 text-xs"
+            >
+              {loading ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <>Check Approval Status</>
+              )}
+            </button>
           </div>
-          <p className="text-xs font-bold text-white">Application Submitted Successfully</p>
-          <p className="text-[11px] text-slate-400">
-            Your application is awaiting landlord approval (`approved_pending_payment`). Click below to check status.
-          </p>
-          <button
-            onClick={handleCheckApprovalStatus}
-            disabled={loading}
-            className="w-full py-2.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5 text-xs"
-          >
-            {loading ? <Loader2 size={12} className="animate-spin" /> : <>Check Approval Status</>}
-          </button>
-        </div>
-      )}
+        )}
 
       {/* Step 2: Unlocked upon approval — Initialize first, then simulate webhook */}
       {step === 2 && (
@@ -387,11 +488,15 @@ const InlineLeaseWidget = ({
           <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1.5 text-xs">
             <div className="flex justify-between text-slate-400">
               <span>Status</span>
-              <span className="text-emerald-400 font-mono">Landlord Approved</span>
+              <span className="text-emerald-400 font-mono">
+                Landlord Approved
+              </span>
             </div>
             <div className="flex justify-between text-slate-400">
               <span>Total Property Rent</span>
-              <span className="text-white font-mono">₦{totalPayment.toLocaleString()}</span>
+              <span className="text-white font-mono">
+                ₦{totalPayment.toLocaleString()}
+              </span>
             </div>
           </div>
 
@@ -401,7 +506,13 @@ const InlineLeaseWidget = ({
               disabled={loading}
               className="w-full py-2.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5"
             >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <><CreditCard size={14} /> 1. Initialize Payment Metadata</>}
+              {loading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <>
+                  <CreditCard size={14} /> 1. Initialize Payment Metadata
+                </>
+              )}
             </button>
           ) : (
             <button
@@ -409,7 +520,14 @@ const InlineLeaseWidget = ({
               disabled={loading}
               className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl transition flex items-center justify-center gap-1.5"
             >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <><CheckCircle2 size={14} /> 2. Simulate Payment Completed (Webhook)</>}
+              {loading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <>
+                  <CheckCircle2 size={14} /> 2. Simulate Payment Completed
+                  (Webhook)
+                </>
+              )}
             </button>
           )}
         </div>
@@ -421,14 +539,24 @@ const InlineLeaseWidget = ({
           <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/30">
             <CheckCircle2 size={20} />
           </div>
-          <p className="text-xs font-bold text-white">Payment Completed & Lease Active</p>
-          <p className="text-[11px] text-slate-400 font-mono">Lease ID: <span className="text-[var(--amber)]">{leaseId}</span></p>
+          <p className="text-xs font-bold text-white">
+            Payment Completed & Lease Active
+          </p>
+          <p className="text-[11px] text-slate-400 font-mono">
+            Lease ID: <span className="text-[var(--amber)]">{leaseId}</span>
+          </p>
           <button
             onClick={handleFetchDocument}
             disabled={loading}
             className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white border border-white/10 font-semibold rounded-xl transition flex items-center justify-center gap-1.5 text-xs"
           >
-            {loading ? <Loader2 size={12} className="animate-spin" /> : <><Download size={12} /> View Signed Lease PDF</>}
+            {loading ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <>
+                <Download size={12} /> View Signed Lease PDF
+              </>
+            )}
           </button>
         </div>
       )}
@@ -445,35 +573,27 @@ export const ChatBox = ({
 }) => {
   const { user } = useAuth();
 
-  const [isOpen, setIsOpen] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    const saved = localStorage.getItem(STORAGE_KEY_OPEN);
-    return saved ? JSON.parse(saved) : false;
-  });
-
-  const [isMinimized, setIsMinimized] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    const saved = localStorage.getItem(STORAGE_KEY_MINIMIZED);
-    return saved ? JSON.parse(saved) : false;
-  });
-
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    if (typeof window === "undefined") return [];
-    const saved = localStorage.getItem(STORAGE_KEY_MESSAGES);
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [threadId, setThreadId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem(STORAGE_KEY_THREAD);
-  });
+  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [isMinimized, setIsMinimized] = useState<boolean>(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [isMounted, setIsMounted] = useState<boolean>(false);
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeLoaderText, setActiveLoaderText] = useState("Agent is thinking...");
+  const [activeLoaderText, setActiveLoaderText] = useState(
+    "Agent is thinking...",
+  );
 
-  const [tourSelection, setTourSelection] = useState<{ date: string; time: string }>({ date: "", time: "" });
-  const [leaseForm, setLeaseForm] = useState({ moveInDate: "", income: "", guarantor: "" });
+  const [tourSelection, setTourSelection] = useState<{
+    date: string;
+    time: string;
+  }>({ date: "", time: "" });
+  const [leaseForm, setLeaseForm] = useState({
+    moveInDate: "",
+    income: "",
+    guarantor: "",
+  });
   const [signature, setSignature] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -482,39 +602,53 @@ export const ChatBox = ({
 
   const resetConversation = () => {
     setMessages([]);
-    if (typeof window !== "undefined") localStorage.removeItem(STORAGE_KEY_MESSAGES);
+    if (typeof window !== "undefined")
+      localStorage.removeItem(STORAGE_KEY_MESSAGES);
   };
 
   useEffect(() => {
+    setIsMounted(true);
     if (typeof window !== "undefined") {
+      const savedOpen = localStorage.getItem(STORAGE_KEY_OPEN);
+      if (savedOpen) setIsOpen(JSON.parse(savedOpen));
+
+      const savedMinimized = localStorage.getItem(STORAGE_KEY_MINIMIZED);
+      if (savedMinimized) setIsMinimized(JSON.parse(savedMinimized));
+
+      const savedMessages = localStorage.getItem(STORAGE_KEY_MESSAGES);
+      if (savedMessages) setMessages(JSON.parse(savedMessages));
+
+      const savedThread = localStorage.getItem(STORAGE_KEY_THREAD);
+      if (savedThread) setThreadId(savedThread);
+    }
+  }, []);
+
+  // 3. Persist changes back to localStorage when state updates
+  useEffect(() => {
+    if (isMounted && typeof window !== "undefined") {
       localStorage.setItem(STORAGE_KEY_OPEN, JSON.stringify(isOpen));
       localStorage.setItem(STORAGE_KEY_MINIMIZED, JSON.stringify(isMinimized));
       localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages));
       if (threadId) localStorage.setItem(STORAGE_KEY_THREAD, threadId);
     }
-  }, [isOpen, isMinimized, messages, threadId]);
+  }, [isOpen, isMinimized, messages, threadId, isMounted]);
 
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages, loading, isOpen]);
+  // Prevent rendering mismatched local storage UI states until hydration completes
+  if (!isMounted) {
+    return null;
+  }
 
-  useEffect(() => {
-    const handleOpen = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { prefill?: string } | undefined;
-      setIsOpen(true);
-      setIsMinimized(false);
-      if (detail?.prefill) setInput(detail.prefill);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    };
-    window.addEventListener("open-agent-chat", handleOpen);
-    return () => window.removeEventListener("open-agent-chat", handleOpen);
-  }, []);
-
-  const handleSend = async (textToSend?: string, requestMeta?: { propertyId?: string }) => {
+  const handleSend = async (
+    textToSend?: string,
+    requestMeta?: { propertyId?: string },
+  ) => {
     const messageText = textToSend || input;
     if (!messageText.trim()) return;
 
-    const newMessages = [...messages, { role: "user" as const, content: messageText }];
+    const newMessages = [
+      ...messages,
+      { role: "user" as const, content: messageText },
+    ];
     setMessages(newMessages);
     if (!textToSend) setInput("");
     setActiveLoaderText(customLoaderText || getActionLoaderText(messageText));
@@ -524,7 +658,9 @@ export const ChatBox = ({
       const response = await apiClient.post("/api/chat", {
         message: messageText,
         thread_id: threadId,
-        ...(requestMeta?.propertyId ? { property_id: requestMeta.propertyId } : {}),
+        ...(requestMeta?.propertyId
+          ? { property_id: requestMeta.propertyId }
+          : {}),
       });
       const apiResponse = response.data;
 
@@ -534,15 +670,22 @@ export const ChatBox = ({
         setThreadId(nextThreadId);
       }
 
-      const propertiesPayload = apiResponse?.data?.properties ?? apiResponse?.data;
-      const properties = Array.isArray(propertiesPayload) ? propertiesPayload : [];
+      const propertiesPayload =
+        apiResponse?.data?.properties ?? apiResponse?.data;
+      const properties = Array.isArray(propertiesPayload)
+        ? propertiesPayload
+        : [];
 
       const nestedBookTour = apiResponse?.data?.book_tour;
-      const nestedLeaseUi = apiResponse?.data?.lease_ui_ui || apiResponse?.data?.lease_ui;
+      const nestedLeaseUi =
+        apiResponse?.data?.lease_ui_ui || apiResponse?.data?.lease_ui;
 
       const assistantMessage: ChatMessage = {
         role: "assistant" as const,
-        content: apiResponse?.content || apiResponse?.response || "I have updated your request.",
+        content:
+          apiResponse?.content ||
+          apiResponse?.response ||
+          "I have updated your request.",
         properties: properties.length > 0 ? properties : undefined,
         redirectUrl: apiResponse.redirect_url || undefined,
         tourUi: nestedBookTour?.ui_component
@@ -554,23 +697,35 @@ export const ChatBox = ({
               message: nestedBookTour.message,
             }
           : apiResponse?.data?.tour_ui || undefined,
-        leaseUi: nestedLeaseUi ? {
-          ui_component: nestedLeaseUi.ui_component || "lease_application_signer",
-          property_id: nestedLeaseUi.property_id,
-          ...nestedLeaseUi
-        } : undefined,
+        leaseUi: nestedLeaseUi
+          ? {
+              ui_component:
+                nestedLeaseUi.ui_component || "lease_application_signer",
+              property_id: nestedLeaseUi.property_id,
+              ...nestedLeaseUi,
+            }
+          : undefined,
       };
 
       setMessages([...newMessages, assistantMessage]);
       if (properties.length > 0 && onResults) onResults(properties);
     } catch {
-      setMessages([...newMessages, { role: "assistant", content: "Sorry, I encountered an error connecting to the agent." }]);
+      setMessages([
+        ...newMessages,
+        {
+          role: "assistant",
+          content: "Sorry, I encountered an error connecting to the agent.",
+        },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  const updateMessageLeaseState = (messageIndex: number, updatedFields: Partial<LeaseUiState>) => {
+  const updateMessageLeaseState = (
+    messageIndex: number,
+    updatedFields: Partial<LeaseUiState>,
+  ) => {
     setMessages((prev) => {
       const next = [...prev];
       if (next[messageIndex] && next[messageIndex].leaseUi) {
@@ -593,25 +748,34 @@ export const ChatBox = ({
     setTourSelection({ date: "", time: "" });
   };
 
-  const handleActionClick = (actionType: "tour" | "view" | "apply", property: SearchProperty) => {
+  const handleActionClick = (
+    actionType: "tour" | "view" | "apply",
+    property: SearchProperty,
+  ) => {
     if (actionType === "tour") {
       const propertyContext = [
         `title=${property.title ?? "unknown"}`,
         `location=${property.address ?? "unknown"}`,
         `full_address=${property.address_full ?? property.address ?? "unknown"}`,
       ].join(" | ");
-      handleSend(`I want to schedule a tour for this property. ${propertyContext}`, {
-        propertyId: property.id,
-      });
+      handleSend(
+        `I want to schedule a tour for this property. ${propertyContext}`,
+        {
+          propertyId: property.id,
+        },
+      );
     } else if (actionType === "apply") {
       const propertyContext = [
         `title=${property.title ?? "unknown"}`,
         `location=${property.address ?? "unknown"}`,
         `property_id=${property.id ?? "unknown"}`,
       ].join(" | ");
-      handleSend(`I want to start the lease application and signing process for this property. ${propertyContext}`, {
-        propertyId: property.id,
-      });
+      handleSend(
+        `I want to start the lease application and signing process for this property. ${propertyContext}`,
+        {
+          propertyId: property.id,
+        },
+      );
     } else {
       router.push(`/properties/${property.id}`);
     }
@@ -642,7 +806,9 @@ export const ChatBox = ({
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--amber)]/15 text-[var(--amber)]">
               <Bot size={16} />
             </div>
-            <span className="text-sm font-medium text-slate-100">HousePadi Agent</span>
+            <span className="text-sm font-medium text-slate-100">
+              HousePadi Agent
+            </span>
             <button
               onClick={() => setIsMinimized(false)}
               aria-label="Expand chat"
@@ -666,90 +832,125 @@ export const ChatBox = ({
 
       {isOpen && !isMinimized && (
         <div className="fixed z-50 inset-x-4 bottom-4 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[420px] max-w-full">
-          <div className="bg-[var(--ink-soft)] border border-[var(--amber)]/25 rounded-3xl overflow-hidden shadow-2xl flex flex-col" style={{ height: "min(75vh, 650px)" }}>
+          <div
+            className="bg-[var(--ink-soft)] border border-[var(--amber)]/25 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+            style={{ height: "min(75vh, 650px)" }}
+          >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-full bg-[var(--amber)]/15 border border-[var(--amber)]/30 flex items-center justify-center">
                   <Bot size={13} className="text-[var(--amber)]" />
                 </div>
-                <span className="text-sm font-medium text-white">HousePadi Agent</span>
+                <span className="text-sm font-medium text-white">
+                  HousePadi Agent
+                </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <button onClick={() => setIsMinimized(true)} className="rounded-full p-1 text-slate-500 hover:text-white">
+                <button
+                  onClick={() => setIsMinimized(true)}
+                  className="rounded-full p-1 text-slate-500 hover:text-white"
+                >
                   <ChevronDown size={16} />
                 </button>
-                <button onClick={() => setIsOpen(false)} className="rounded-full p-1 text-slate-500 hover:text-white">
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="rounded-full p-1 text-slate-500 hover:text-white"
+                >
                   <X size={16} />
                 </button>
               </div>
             </div>
 
             {/* Scrollable Message Stream */}
-            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 bg-black/20">
+            <div
+              ref={scrollRef}
+              className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 bg-black/20"
+            >
               {messages.length === 0 && (
                 <div className="text-center text-slate-400 text-xs py-8 space-y-2">
-                  <p className="font-semibold text-white">How can I assist you today?</p>
-                  <p>Ask me to find apartments, schedule viewings, or start your lease application directly!</p>
+                  <p className="font-semibold text-white">
+                    How can I assist you today?
+                  </p>
+                  <p>
+                    Ask me to find apartments, schedule viewings, or start your
+                    lease application directly!
+                  </p>
                 </div>
               )}
 
               {messages.map((m, i) => (
-                <div key={i} className={`flex flex-col gap-2 ${m.role === "user" ? "items-end" : "items-start"}`}>
-                  <div className={`p-3.5 rounded-2xl text-sm leading-relaxed max-w-[85%] ${m.role === "user" ? "bg-[var(--amber)] text-[var(--ink)] font-medium" : "bg-white/5 text-slate-100"}`}>
+                <div
+                  key={i}
+                  className={`flex flex-col gap-2 ${m.role === "user" ? "items-end" : "items-start"}`}
+                >
+                  <div
+                    className={`p-3.5 rounded-2xl text-sm leading-relaxed max-w-[85%] ${m.role === "user" ? "bg-[var(--amber)] text-[var(--ink)] font-medium" : "bg-white/5 text-slate-100"}`}
+                  >
                     {renderMessageContent(m.content)}
                   </div>
 
                   {/* 1. PROPERTY CARDS & PER-PROPERTY ACTION BUTTONS */}
-                  {m.role === "assistant" && m.properties && m.properties.length > 0 && (
-                    <div className="w-full max-w-[90%] space-y-2.5 pt-1">
-                      {m.properties.map((prop, idx) => (
-                        <div key={prop.id || idx} className="bg-black/40 border border-white/10 rounded-2xl p-3 text-xs space-y-2.5">
-                          <div className="flex justify-between items-start gap-2">
-                            <div>
-                              <p className="font-semibold text-white">{prop.title || "Property Listing"}</p>
-                              {prop.address && (
-                                <p className="text-slate-400 text-[11px] flex items-center gap-1 mt-0.5">
-                                  <MapPin size={10} /> {prop.address}
+                  {m.role === "assistant" &&
+                    m.properties &&
+                    m.properties.length > 0 && (
+                      <div className="w-full max-w-[90%] space-y-2.5 pt-1">
+                        {m.properties.map((prop, idx) => (
+                          <div
+                            key={prop.id || idx}
+                            className="bg-black/40 border border-white/10 rounded-2xl p-3 text-xs space-y-2.5"
+                          >
+                            <div className="flex justify-between items-start gap-2">
+                              <div>
+                                <p className="font-semibold text-white">
+                                  {prop.title || "Property Listing"}
                                 </p>
+                                {prop.address && (
+                                  <p className="text-slate-400 text-[11px] flex items-center gap-1 mt-0.5">
+                                    <MapPin size={10} /> {prop.address}
+                                  </p>
+                                )}
+                              </div>
+                              {prop.price && (
+                                <span className="text-[var(--amber)] font-bold text-xs shrink-0">
+                                  ₦{prop.price.toLocaleString()}
+                                </span>
                               )}
                             </div>
-                            {prop.price && (
-                              <span className="text-[var(--amber)] font-bold text-xs shrink-0">
-                                ₦{prop.price.toLocaleString()}
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* Action Buttons for Each Property */}
-                          <div className="space-y-1.5 pt-1 border-t border-white/5">
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleActionClick("tour", prop)}
-                                className="flex-1 py-1.5 px-2 bg-[var(--amber)]/15 border border-[var(--amber)]/30 rounded-xl text-[var(--amber)] font-medium text-[11px] hover:bg-[var(--amber)]/25 transition flex items-center justify-center gap-1"
-                              >
-                                <Calendar size={12} /> Book Tour
-                              </button>
-                              {prop.id && (
+
+                            {/* Action Buttons for Each Property */}
+                            <div className="space-y-1.5 pt-1 border-t border-white/5">
+                              <div className="flex gap-2">
                                 <button
-                                  onClick={() => handleActionClick("view", prop)}
-                                  className="py-1.5 px-3 bg-white/5 border border-white/10 rounded-xl text-slate-300 font-medium text-[11px] hover:bg-white/10 transition flex items-center justify-center gap-1"
+                                  onClick={() =>
+                                    handleActionClick("tour", prop)
+                                  }
+                                  className="flex-1 py-1.5 px-2 bg-[var(--amber)]/15 border border-[var(--amber)]/30 rounded-xl text-[var(--amber)] font-medium text-[11px] hover:bg-[var(--amber)]/25 transition flex items-center justify-center gap-1"
                                 >
-                                  <Eye size={12} /> View
+                                  <Calendar size={12} /> Book Tour
                                 </button>
-                              )}
+                                {prop.id && (
+                                  <button
+                                    onClick={() =>
+                                      handleActionClick("view", prop)
+                                    }
+                                    className="py-1.5 px-3 bg-white/5 border border-white/10 rounded-xl text-slate-300 font-medium text-[11px] hover:bg-white/10 transition flex items-center justify-center gap-1"
+                                  >
+                                    <Eye size={12} /> View
+                                  </button>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => handleActionClick("apply", prop)}
+                                className="w-full py-1.5 px-3 bg-[var(--amber)]/10 border border-[var(--amber)]/30 rounded-xl text-[var(--amber)] font-bold text-[11px] hover:bg-[var(--amber)]/20 transition flex items-center justify-center gap-1.5"
+                              >
+                                <FileText size={12} /> Apply for Lease Now
+                              </button>
                             </div>
-                            <button
-                              onClick={() => handleActionClick("apply", prop)}
-                              className="w-full py-1.5 px-3 bg-[var(--amber)]/10 border border-[var(--amber)]/30 rounded-xl text-[var(--amber)] font-bold text-[11px] hover:bg-[var(--amber)]/20 transition flex items-center justify-center gap-1.5"
-                            >
-                              <FileText size={12} /> Apply for Lease Now
-                            </button>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
 
                   {/* 2. REDIRECT URL ACTION BUTTON */}
                   {m.role === "assistant" && m.redirectUrl && (
@@ -764,127 +965,185 @@ export const ChatBox = ({
                   )}
 
                   {/* 3. TOUR CALENDAR SELECTION WIDGET */}
-                  {m.role === "assistant" && (m.tourUi?.ui_component === "calendar" || m.tourUi?.action === "awaiting_datetime") && (
-                    <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
-                      <p className="font-bold text-[var(--amber)] uppercase tracking-wider flex items-center gap-1.5">
-                        <Calendar size={14} /> Schedule Viewing Date & Time
-                      </p>
-                      <input
-                        type="date"
-                        value={tourSelection.date}
-                        onChange={(e) => setTourSelection({ ...tourSelection, date: e.target.value })}
-                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
-                      />
-                      <input
-                        type="time"
-                        value={tourSelection.time}
-                        onChange={(e) => setTourSelection({ ...tourSelection, time: e.target.value })}
-                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
-                      />
-                      <button
-                        onClick={submitTourSelection}
-                        disabled={!tourSelection.date || !tourSelection.time}
-                        className="w-full py-2.5 bg-[var(--amber)] font-bold text-[var(--ink)] rounded-xl disabled:opacity-50"
-                      >
-                        Confirm Tour Request
-                      </button>
-                    </div>
-                  )}
+                  {m.role === "assistant" &&
+                    (m.tourUi?.ui_component === "calendar" ||
+                      m.tourUi?.action === "awaiting_datetime") && (
+                      <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
+                        <p className="font-bold text-[var(--amber)] uppercase tracking-wider flex items-center gap-1.5">
+                          <Calendar size={14} /> Schedule Viewing Date & Time
+                        </p>
+                        <input
+                          type="date"
+                          value={tourSelection.date}
+                          onChange={(e) =>
+                            setTourSelection({
+                              ...tourSelection,
+                              date: e.target.value,
+                            })
+                          }
+                          className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
+                        />
+                        <input
+                          type="time"
+                          value={tourSelection.time}
+                          onChange={(e) =>
+                            setTourSelection({
+                              ...tourSelection,
+                              time: e.target.value,
+                            })
+                          }
+                          className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
+                        />
+                        <button
+                          onClick={submitTourSelection}
+                          disabled={!tourSelection.date || !tourSelection.time}
+                          className="w-full py-2.5 bg-[var(--amber)] font-bold text-[var(--ink)] rounded-xl disabled:opacity-50"
+                        >
+                          Confirm Tour Request
+                        </button>
+                      </div>
+                    )}
 
                   {/* 4. LEASE APPLICATION FORM WIDGET */}
-                  {m.role === "assistant" && m.leaseUi?.ui_component === "application_form" && (
-                    <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
-                      <p className="font-bold text-[var(--amber)] uppercase tracking-wider flex items-center gap-1.5">
-                        <FileText size={14} /> Lease Application Details
-                      </p>
-                      <input
-                        type="date"
-                        value={leaseForm.moveInDate}
-                        onChange={(e) => setLeaseForm({ ...leaseForm, moveInDate: e.target.value })}
-                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
-                      />
-                      <input
-                        type="number"
-                        placeholder="Monthly Income"
-                        value={leaseForm.income}
-                        onChange={(e) => setLeaseForm({ ...leaseForm, income: e.target.value })}
-                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Guarantor Name"
-                        value={leaseForm.guarantor}
-                        onChange={(e) => setLeaseForm({ ...leaseForm, guarantor: e.target.value })}
-                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
-                      />
-                      <button
-                        onClick={() => handleSend(`Submit application: Move-in=${leaseForm.moveInDate}, Income=${leaseForm.income}, Guarantor=${leaseForm.guarantor}`)}
-                        className="w-full py-2.5 bg-[var(--amber)] font-bold text-[var(--ink)] rounded-xl"
-                      >
-                        Submit Application
-                      </button>
-                    </div>
-                  )}
+                  {m.role === "assistant" &&
+                    m.leaseUi?.ui_component === "application_form" && (
+                      <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
+                        <p className="font-bold text-[var(--amber)] uppercase tracking-wider flex items-center gap-1.5">
+                          <FileText size={14} /> Lease Application Details
+                        </p>
+                        <input
+                          type="date"
+                          value={leaseForm.moveInDate}
+                          onChange={(e) =>
+                            setLeaseForm({
+                              ...leaseForm,
+                              moveInDate: e.target.value,
+                            })
+                          }
+                          className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Monthly Income"
+                          value={leaseForm.income}
+                          onChange={(e) =>
+                            setLeaseForm({
+                              ...leaseForm,
+                              income: e.target.value,
+                            })
+                          }
+                          className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Guarantor Name"
+                          value={leaseForm.guarantor}
+                          onChange={(e) =>
+                            setLeaseForm({
+                              ...leaseForm,
+                              guarantor: e.target.value,
+                            })
+                          }
+                          className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
+                        />
+                        <button
+                          onClick={() =>
+                            handleSend(
+                              `Submit application: Move-in=${leaseForm.moveInDate}, Income=${leaseForm.income}, Guarantor=${leaseForm.guarantor}`,
+                            )
+                          }
+                          className="w-full py-2.5 bg-[var(--amber)] font-bold text-[var(--ink)] rounded-xl"
+                        >
+                          Submit Application
+                        </button>
+                      </div>
+                    )}
 
                   {/* 5. SIGNATURE PAD WIDGET */}
-                  {m.role === "assistant" && m.leaseUi?.ui_component === "signature_pad" && (
-                    <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
-                      <p className="font-bold text-[var(--amber)] uppercase tracking-wider flex items-center gap-1.5">
-                        <PenTool size={14} /> Digital Signature
-                      </p>
-                      <input
-                        type="text"
-                        placeholder="Type Legal Name to Sign"
-                        value={signature}
-                        onChange={(e) => setSignature(e.target.value)}
-                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white font-serif italic"
-                      />
-                      <button
-                        onClick={() => handleSend(`Sign lease agreement: signature=${signature}`)}
-                        disabled={!signature.trim()}
-                        className="w-full py-2.5 bg-[var(--amber)] font-bold text-[var(--ink)] rounded-xl disabled:opacity-50"
-                      >
-                        Sign Agreement
-                      </button>
-                    </div>
-                  )}
+                  {m.role === "assistant" &&
+                    m.leaseUi?.ui_component === "signature_pad" && (
+                      <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
+                        <p className="font-bold text-[var(--amber)] uppercase tracking-wider flex items-center gap-1.5">
+                          <PenTool size={14} /> Digital Signature
+                        </p>
+                        <input
+                          type="text"
+                          placeholder="Type Legal Name to Sign"
+                          value={signature}
+                          onChange={(e) => setSignature(e.target.value)}
+                          className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white font-serif italic"
+                        />
+                        <button
+                          onClick={() =>
+                            handleSend(
+                              `Sign lease agreement: signature=${signature}`,
+                            )
+                          }
+                          disabled={!signature.trim()}
+                          className="w-full py-2.5 bg-[var(--amber)] font-bold text-[var(--ink)] rounded-xl disabled:opacity-50"
+                        >
+                          Sign Agreement
+                        </button>
+                      </div>
+                    )}
 
                   {/* 6. PAYMENT GATEWAY WIDGET */}
-                  {m.role === "assistant" && m.leaseUi?.ui_component === "payment_gateway" && (
-                    <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
-                      <p className="font-bold text-[var(--amber)] uppercase tracking-wider flex items-center gap-1.5">
-                        <CreditCard size={14} /> Pay Initial Rent & Security Deposit
-                      </p>
-                      <p className="text-slate-400">Total Due: <strong className="text-white">₦{m.leaseUi.amount?.toLocaleString()}</strong></p>
-                      <button
-                        onClick={() => handleSend(`Complete payment for lease ${m.leaseUi?.lease_id}`)}
-                        className="w-full py-2.5 bg-emerald-500 font-bold text-black rounded-xl"
-                      >
-                        Authorize Payment
-                      </button>
-                    </div>
-                  )}
+                  {m.role === "assistant" &&
+                    m.leaseUi?.ui_component === "payment_gateway" && (
+                      <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
+                        <p className="font-bold text-[var(--amber)] uppercase tracking-wider flex items-center gap-1.5">
+                          <CreditCard size={14} /> Pay Initial Rent & Security
+                          Deposit
+                        </p>
+                        <p className="text-slate-400">
+                          Total Due:{" "}
+                          <strong className="text-white">
+                            ₦{m.leaseUi.amount?.toLocaleString()}
+                          </strong>
+                        </p>
+                        <button
+                          onClick={() =>
+                            handleSend(
+                              `Complete payment for lease ${m.leaseUi?.lease_id}`,
+                            )
+                          }
+                          className="w-full py-2.5 bg-emerald-500 font-bold text-black rounded-xl"
+                        >
+                          Authorize Payment
+                        </button>
+                      </div>
+                    )}
 
                   {/* 7. INTERACTIVE INLINE LEASE SIGNER & FLOW WITH PERSISTENT STATE */}
-                  {m.role === "assistant" && m.leaseUi?.ui_component === "lease_application_signer" && m.leaseUi?.property_id && (
-                    <InlineLeaseWidget
-                      propertyId={m.leaseUi.property_id}
-                      initialAmount={
-                        m.leaseUi.amount ||
-                        messages.flatMap((msg) => msg.properties || []).find((p) => p.id === m.leaseUi?.property_id)?.price ||
-                        500000
-                      }
-                      leaseUi={m.leaseUi}
-                      onStateChange={(updatedFields) => updateMessageLeaseState(i, updatedFields)}
-                      userId={user?.id || ''}
-                    />
-                  )}
+                  {m.role === "assistant" &&
+                    m.leaseUi?.ui_component === "lease_application_signer" &&
+                    m.leaseUi?.property_id && (
+                      <InlineLeaseWidget
+                        propertyId={m.leaseUi.property_id}
+                        initialAmount={
+                          m.leaseUi.amount ||
+                          messages
+                            .flatMap((msg) => msg.properties || [])
+                            .find((p) => p.id === m.leaseUi?.property_id)
+                            ?.price ||
+                          500000
+                        }
+                        leaseUi={m.leaseUi}
+                        onStateChange={(updatedFields) =>
+                          updateMessageLeaseState(i, updatedFields)
+                        }
+                        userId={user?.id || ""}
+                      />
+                    )}
                 </div>
               ))}
 
               {loading && (
                 <div className="flex items-center gap-2 text-slate-400 text-xs">
-                  <Loader2 size={14} className="animate-spin text-[var(--amber)]" />
+                  <Loader2
+                    size={14}
+                    className="animate-spin text-[var(--amber)]"
+                  />
                   <span>{activeLoaderText}</span>
                 </div>
               )}
@@ -902,7 +1161,10 @@ export const ChatBox = ({
                   placeholder="Type a message or ask to apply..."
                   className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-[var(--amber)]/50"
                 />
-                <button onClick={() => handleSend()} className="p-2.5 bg-[var(--amber)] text-[var(--ink)] rounded-2xl font-bold hover:bg-[var(--amber-soft)]">
+                <button
+                  onClick={() => handleSend()}
+                  className="p-2.5 bg-[var(--amber)] text-[var(--ink)] rounded-2xl font-bold hover:bg-[var(--amber-soft)]"
+                >
                   <Send size={15} />
                 </button>
               </div>

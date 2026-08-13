@@ -5,12 +5,9 @@ import { useRouter } from "next/navigation";
 import { Property } from "../types/property";
 import { EditPropertyModal } from "./modals/EditPropertyModal";
 import { LeaseFlowModal } from "./modals/LeaseFlowModal";
-import { ChevronLeft, ChevronRight, MapPin, ArrowLeft, Building, LayoutGrid, CalendarDays, FileCheck, Bot } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, ArrowLeft, Building, LayoutGrid, CalendarDays, FileCheck, Bot, Loader2 } from "lucide-react";
 import { apiClient } from "../lib/api-client";
 import { useAuth } from "../context/AuthContext";
-
-
-
 
 interface PropertyDetailsViewProps {
   property: Property;
@@ -30,9 +27,12 @@ export const PropertyDetailsView = ({
   const [tourSelection, setTourSelection] = useState<{ date: string; time: string }>({ date: "", time: "" });
   const [tourStatus, setTourStatus] = useState<string | null>(null);
   const [isSubmittingTour, setIsSubmittingTour] = useState(false);
+  
+  // Document loading & error states
+  const [isLoadingDoc, setIsLoadingDoc] = useState(false);
+  const [docErrorMsg, setDocErrorMsg] = useState<string | null>(null);
 
   const { user } = useAuth();
-  
 
   const nextImage = () => setCurrentIdx((prev) => (prev + 1) % property.images.length);
   const prevImage = () => setCurrentIdx((prev) => (prev - 1 + property.images.length) % property.images.length);
@@ -58,6 +58,25 @@ export const PropertyDetailsView = ({
     }
   };
 
+  const handleFetchDocument = async () => {
+    const leaseId = property.lease_id;
+    if (!leaseId) return;
+
+    setIsLoadingDoc(true);
+    setDocErrorMsg(null);
+
+    try {
+      const response = await apiClient.get(`/api/leases/${leaseId}/document`);
+      if (response.data?.signed_url) {
+        window.open(response.data.signed_url, "_blank");
+      }
+    } catch (err: any) {
+      setDocErrorMsg(err.response?.data?.detail || "Document not yet available. Waiting for final processing.");
+    } finally {
+      setIsLoadingDoc(false);
+    }
+  };
+
   const handleOpenAgentForLease = () => {
     window.dispatchEvent(
       new CustomEvent("open-agent-chat", {
@@ -67,6 +86,8 @@ export const PropertyDetailsView = ({
       })
     );
   };
+
+  const propertyStatus = property.status?.toLowerCase() || "available";
 
   return (
     <div className="min-h-screen bg-(--ink) text-slate-100 antialiased">
@@ -162,50 +183,97 @@ export const PropertyDetailsView = ({
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Tenant Actions</h3>
                 </div>
 
-                {/* Tour Schedule Section */}
-                <div className="rounded-2xl border border-[var(--amber)]/20 bg-[var(--amber)]/10 p-4 space-y-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--amber)]">
-                    Select tour date & time
+                {propertyStatus === "available" ? (
+                  <>
+                    {/* Tour Schedule Section */}
+                    <div className="rounded-2xl border border-[var(--amber)]/20 bg-[var(--amber)]/10 p-4 space-y-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--amber)]">
+                        Select tour date & time
+                      </div>
+                      <input
+                        type="date"
+                        value={tourSelection.date}
+                        onChange={(e) => setTourSelection((prev) => ({ ...prev, date: e.target.value }))}
+                        className="w-full rounded-xl border border-white/10 bg-[var(--ink)]/70 px-3 py-2 text-sm text-white"
+                      />
+                      <input
+                        type="time"
+                        value={tourSelection.time}
+                        onChange={(e) => setTourSelection((prev) => ({ ...prev, time: e.target.value }))}
+                        className="w-full rounded-xl border border-white/10 bg-[var(--ink)]/70 px-3 py-2 text-sm text-white"
+                      />
+                      <button
+                        onClick={handleTourSubmit}
+                        disabled={!tourSelection.date || !tourSelection.time || isSubmittingTour}
+                        className="w-full py-3 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <CalendarDays size={16} /> {isSubmittingTour ? "Submitting..." : "Schedule Viewing"}
+                      </button>
+                      {tourStatus && (
+                        <p className="text-xs text-slate-300">{tourStatus}</p>
+                      )}
+                    </div>
+
+                    {/* Direct Lease Application CTA */}
+                    <button
+                      onClick={() => setIsLeaseModalOpen(true)}
+                      className="w-full py-3.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-black/20"
+                    >
+                      <FileCheck size={16} /> Apply for Lease (Direct)
+                    </button>
+
+                    {/* AI Agent Assisted CTA */}
+                    <button
+                      onClick={handleOpenAgentForLease}
+                      className="w-full py-3 bg-[var(--ink)] hover:bg-white/5 text-slate-300 border border-white/10 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2"
+                    >
+                      <Bot size={16} className="text-[var(--amber)]" /> Apply via Agent Chat
+                    </button>
+                  </>
+                ) : propertyStatus === "rented" ? (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-[var(--ink)]/60 border border-white/5 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Rented By</span>
+                        {property.renter?.kyc_status && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            KYC: {property.renter.kyc_status}
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-sm font-semibold text-white">
+                          {property.renter 
+                            ? `${property.renter.first_name} ${property.renter.last_name}` 
+                            : (property.renter_name || property.tenant_name || "Verified Tenant")}
+                        </div>
+                        {property.renter?.email && (
+                          <p className="text-xs text-slate-400">{property.renter.email}</p>
+                        )}
+                        {property.renter?.phone_number && (
+                          <p className="text-xs text-slate-400 font-mono-num">{property.renter.phone_number}</p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleFetchDocument}
+                      disabled={isLoadingDoc || !property.lease_id}
+                      className="w-full py-3 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isLoadingDoc ? <Loader2 size={16} className="animate-spin" /> : <FileCheck size={16} />} 
+                      {isLoadingDoc ? "Loading Agreement..." : "View Lease Agreement"}
+                    </button>
+                    {docErrorMsg && (
+                      <p className="text-xs text-rose-400">{docErrorMsg}</p>
+                    )}
                   </div>
-                  <input
-                    type="date"
-                    value={tourSelection.date}
-                    onChange={(e) => setTourSelection((prev) => ({ ...prev, date: e.target.value }))}
-                    className="w-full rounded-xl border border-white/10 bg-[var(--ink)]/70 px-3 py-2 text-sm text-white"
-                  />
-                  <input
-                    type="time"
-                    value={tourSelection.time}
-                    onChange={(e) => setTourSelection((prev) => ({ ...prev, time: e.target.value }))}
-                    className="w-full rounded-xl border border-white/10 bg-[var(--ink)]/70 px-3 py-2 text-sm text-white"
-                  />
-                  <button
-                    onClick={handleTourSubmit}
-                    disabled={!tourSelection.date || !tourSelection.time || isSubmittingTour}
-                    className="w-full py-3 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <CalendarDays size={16} /> {isSubmittingTour ? "Submitting..." : "Schedule Viewing"}
-                  </button>
-                  {tourStatus && (
-                    <p className="text-xs text-slate-300">{tourStatus}</p>
-                  )}
-                </div>
-
-                {/* Direct Lease Application CTA */}
-                <button
-                  onClick={() => setIsLeaseModalOpen(true)}
-                  className="w-full py-3.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-black/20"
-                >
-                  <FileCheck size={16} /> Apply for Lease (Direct)
-                </button>
-
-                {/* AI Agent Assisted CTA */}
-                <button
-                  onClick={handleOpenAgentForLease}
-                  className="w-full py-3 bg-[var(--ink)] hover:bg-white/5 text-slate-300 border border-white/10 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2"
-                >
-                  <Bot size={16} className="text-[var(--amber)]" /> Apply via Agent Chat
-                </button>
+                ) : (
+                  <div className="p-4 bg-[var(--ink)]/60 border border-white/5 rounded-xl text-center space-y-2">
+                    <p className="text-xs text-slate-400">
+                      This property is currently <span className="capitalize text-white font-semibold">{property.status}</span>. No actions can be taken at this time.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -250,7 +318,7 @@ export const PropertyDetailsView = ({
         onStateChange={function (updated: any): void {
           throw new Error("Function not implemented.");
         } }
-        userId={user.id || ''}        
+        userId={user?.id || ''}        
       />
     </div>
   );

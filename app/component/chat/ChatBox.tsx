@@ -90,6 +90,66 @@ const EMPTY_FORM_STATE: SimpleLeaseFormState = {
   signature: "",
 };
 
+const CALENDAR_UI = "calendar_picker";
+const LEASE_UI_COMPONENTS = new Set([
+  "application_form",
+  "signature_pad",
+  "payment_gateway",
+  "lease_completed",
+  "lease_application_signer",
+]);
+
+/**
+ * Scans every value under the response's `data` object for one shaped like
+ * a UI signal (i.e. it has a `ui_component` field) and routes it to the
+ * right widget by that field's value — never by which key it landed under.
+ *
+ * Backend tools currently surface these under at least three different key
+ * shapes depending on which code path produced them (a tool's own direct
+ * return, like book_tour_worker's calendar prompt; the synthetic
+ * TOOL_UI_FALLBACKS path; or a bare tour_ui/lease_ui key) — chasing each
+ * one's derived key name by hand is fragile. This makes the frontend
+ * independent of that naming entirely.
+ */
+const extractUiSignal = (
+  data: unknown,
+): { tourUi?: TourUiState; leaseUi?: LeaseUiState } => {
+  if (!data || typeof data !== "object") return {};
+
+  for (const value of Object.values(data as Record<string, unknown>)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const candidate = value as Record<string, unknown>;
+    const uiComponent = candidate.ui_component;
+    if (typeof uiComponent !== "string") continue;
+
+    if (uiComponent === CALENDAR_UI) {
+      return {
+        tourUi: {
+          ui_component: uiComponent,
+          action:
+            (candidate.status as string) ||
+            (candidate.action as string) ||
+            "awaiting_datetime",
+          property_id: candidate.property_id as string | undefined,
+          status: candidate.status as string | undefined,
+          message: candidate.message as string | undefined,
+        },
+      };
+    }
+
+    if (LEASE_UI_COMPONENTS.has(uiComponent)) {
+      return {
+        leaseUi: {
+          ...(candidate as unknown as LeaseUiState),
+          ui_component: uiComponent as LeaseUiState["ui_component"],
+        },
+      };
+    }
+  }
+
+  return {};
+};
+
 const formatPrice = (amount?: number, currency?: string): string => {
   if (amount === undefined || amount === null) return "";
   try {
@@ -685,9 +745,7 @@ export const ChatBox = ({
         ? propertiesPayload
         : [];
 
-      const nestedBookTour = apiResponse?.data?.book_tour_ui;
-      const nestedLeaseUi =
-        apiResponse?.data?.lease_ui_ui || apiResponse?.data?.lease_ui;
+      const uiSignal = extractUiSignal(apiResponse?.data);
 
       const assistantMessage: ChatMessage = {
         role: "assistant" as const,
@@ -697,23 +755,8 @@ export const ChatBox = ({
           "I have updated your request.",
         properties: properties.length > 0 ? properties : undefined,
         redirectUrl: apiResponse.redirect_url || undefined,
-        tourUi: nestedBookTour?.ui_component
-          ? {
-              ui_component: nestedBookTour.ui_component,
-              action: nestedBookTour.status || "awaiting_datetime",
-              property_id: nestedBookTour.property_id,
-              status: nestedBookTour.status,
-              message: nestedBookTour.message,
-            }
-          : apiResponse?.data?.tour_ui || undefined,
-        leaseUi: nestedLeaseUi
-          ? {
-              ui_component:
-                nestedLeaseUi.ui_component || "lease_application_signer",
-              property_id: nestedLeaseUi.property_id,
-              ...nestedLeaseUi,
-            }
-          : undefined,
+        tourUi: uiSignal.tourUi,
+        leaseUi: uiSignal.leaseUi,
       };
 
       setMessages([...newMessages, assistantMessage]);
@@ -1137,7 +1180,7 @@ export const ChatBox = ({
 
                   {m.role === "assistant" &&
                     (m.tourUi?.ui_component === "calendar_picker" ||
-                      m.tourUi?.action === "awaiting_datetime") && (
+                      m.tourUi?.status === "awaiting_datetime") && (
                       <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
                         <p className="font-bold text-[var(--amber)] uppercase tracking-wider flex items-center gap-1.5">
                           <Calendar size={14} /> Schedule Viewing Date & Time

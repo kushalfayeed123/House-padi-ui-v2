@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const apiClient = axios.create({ baseURL: "http://localhost:8000" });
+export const apiClient = axios.create({ baseURL: "https://house-padi-engine-v2.onrender.com" });
 
 const redirectToLogin = (reason: string) => {
   if (typeof window === "undefined") return;

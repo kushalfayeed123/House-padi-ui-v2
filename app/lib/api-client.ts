@@ -1,6 +1,24 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from "axios";
 
-export const apiClient = axios.create({ baseURL: "https://house-padi-engine-v2.onrender.com" });
+const getBaseUrl = () => {
+  // 1. Allow explicit override via environment variable if provided
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+
+  // 2. Automatically fallback based on Next.js environment
+  if (process.env.NODE_ENV === "development") {
+    return "http://localhost:8000";
+  }
+
+  // 3. Default production fallback (Replace with your actual Render/Cloud backend URL)
+  return "https://house-padi-engine-v2.onrender.com";
+};
+
+export const apiClient = axios.create({ 
+  baseURL: getBaseUrl() 
+});
 
 const redirectToLogin = (reason: string) => {
   if (typeof window === "undefined") return;

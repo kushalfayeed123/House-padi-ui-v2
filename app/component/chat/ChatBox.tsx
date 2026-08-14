@@ -17,6 +17,8 @@ import {
   ExternalLink,
   ShieldCheck,
   Download,
+  Trash2,
+  ArrowDown,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/app/lib/api-client";
@@ -47,6 +49,7 @@ type LeaseUiState = {
   lease_id?: string;
   property_id?: string;
   amount?: number;
+  currency?: string;
   status?: string;
   message?: string;
   action?: string;
@@ -71,6 +74,33 @@ type ChatMessage = {
   redirectUrl?: string;
   tourUi?: TourUiState;
   leaseUi?: LeaseUiState;
+};
+
+type SimpleLeaseFormState = {
+  moveInDate: string;
+  income: string;
+  guarantor: string;
+  signature: string;
+};
+
+const EMPTY_FORM_STATE: SimpleLeaseFormState = {
+  moveInDate: "",
+  income: "",
+  guarantor: "",
+  signature: "",
+};
+
+const formatPrice = (amount?: number, currency?: string): string => {
+  if (amount === undefined || amount === null) return "";
+  try {
+    return new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency: currency || "NGN",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `${currency || "₦"}${amount.toLocaleString()}`;
+  }
 };
 
 const getActionLoaderText = (text: string): string => {
@@ -130,6 +160,7 @@ const renderMessageContent = (content: string): ReactNode[] => {
       rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
         ? rawUrl
         : `https://${rawUrl}`;
+
     fragments.push(
       <a
         key={`link-${start}`}
@@ -154,17 +185,17 @@ const renderMessageContent = (content: string): ReactNode[] => {
     : [<span key="empty">{content}</span>];
 };
 
-// Interactive Inline Lease Flow Widget with persistent state synchronization
-// Interactive Inline Lease Flow Widget with Landlord Gate & Payment Initialization/Simulation
 const InlineLeaseWidget = ({
   propertyId,
   initialAmount = 500000,
+  currency = "NGN",
   leaseUi,
   onStateChange,
   userId,
 }: {
   propertyId: string;
   initialAmount?: number;
+  currency?: string;
   leaseUi?: LeaseUiState;
   onStateChange: (updated: Partial<LeaseUiState>) => void;
   userId: string;
@@ -187,12 +218,9 @@ const InlineLeaseWidget = ({
     leaseUi?.status || "pending_approval",
   );
 
-  // Payment states
   const [paymentInitialized, setPaymentInitialized] = useState(false);
-
   const totalPayment = initialAmount;
 
-  // Step 1: Submit Application & Digital Signature
   const handleApplyAndSign = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -232,7 +260,6 @@ const InlineLeaseWidget = ({
     }
   };
 
-  // Check Landlord Approval Status
   const handleCheckApprovalStatus = async () => {
     if (!applicationId && !leaseId) return;
     setLoading(true);
@@ -274,7 +301,6 @@ const InlineLeaseWidget = ({
     }
   };
 
-  // Step A (Payment): Initialize Payment first (/payments/initialize)
   const handleInitializePayment = async () => {
     if (!leaseId) return;
     setLoading(true);
@@ -296,14 +322,12 @@ const InlineLeaseWidget = ({
     }
   };
 
-  // Step B (Payment): Simulate Payment Webhook after initialization (/payments/webhook)
   const handleSimulateWebhook = async () => {
     if (!leaseId) return;
     setLoading(true);
     setErrorMsg(null);
 
     try {
-      // Matches backend expectation: amount multiplied by 100 for Paystack kobo conversion check
       await apiClient.post(`/payments/webhook`, {
         event: "charge.success",
         data: {
@@ -330,7 +354,6 @@ const InlineLeaseWidget = ({
     }
   };
 
-  // Fetch Final Signed PDF Document
   const handleFetchDocument = async () => {
     if (!leaseId) return;
     setLoading(true);
@@ -386,7 +409,6 @@ const InlineLeaseWidget = ({
         </div>
       )}
 
-      {/* Step 1 Form Submission */}
       {step === 1 && !applicationId && (
         <form onSubmit={handleApplyAndSign} className="space-y-3">
           <div className="space-y-1">
@@ -395,7 +417,7 @@ const InlineLeaseWidget = ({
                 Proposed Start Date
               </label>
               <span className="text-[var(--amber)] font-mono">
-                Rent: ₦{totalPayment.toLocaleString()}
+                Rent: {formatPrice(totalPayment, currency)}
               </span>
             </div>
             <input
@@ -415,8 +437,8 @@ const InlineLeaseWidget = ({
               Residential Tenancy Terms
             </p>
             By signing below, you commit to leasing this property starting from{" "}
-            {startDate || "the specified date"} for the total amount of ₦
-            {totalPayment.toLocaleString()}.
+            {startDate || "the specified date"} for the total amount of{" "}
+            {formatPrice(totalPayment, currency)}.
           </div>
 
           <div className="space-y-1">
@@ -453,7 +475,6 @@ const InlineLeaseWidget = ({
         </form>
       )}
 
-      {/* Waiting for Landlord Approval State */}
       {step === 1 &&
         applicationId &&
         applicationStatus === "pending_approval" && (
@@ -465,8 +486,8 @@ const InlineLeaseWidget = ({
               Application Submitted Successfully
             </p>
             <p className="text-[11px] text-slate-400">
-              Your application is awaiting landlord approval
-              (`approved_pending_payment`). Click below to check status.
+              Your application is awaiting landlord approval. Click below to
+              check status.
             </p>
             <button
               onClick={handleCheckApprovalStatus}
@@ -482,7 +503,6 @@ const InlineLeaseWidget = ({
           </div>
         )}
 
-      {/* Step 2: Unlocked upon approval — Initialize first, then simulate webhook */}
       {step === 2 && (
         <div className="space-y-3">
           <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1.5 text-xs">
@@ -495,7 +515,7 @@ const InlineLeaseWidget = ({
             <div className="flex justify-between text-slate-400">
               <span>Total Property Rent</span>
               <span className="text-white font-mono">
-                ₦{totalPayment.toLocaleString()}
+                {formatPrice(totalPayment, currency)}
               </span>
             </div>
           </div>
@@ -533,7 +553,6 @@ const InlineLeaseWidget = ({
         </div>
       )}
 
-      {/* Step 3: Confirmation / Lease Completed */}
       {step === 3 && (
         <div className="space-y-3 text-center py-1">
           <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/30">
@@ -578,6 +597,12 @@ export const ChatBox = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState<boolean>(false);
+  const [hasUnread, setHasUnread] = useState<boolean>(false);
+
+  // Smart Scroll states
+  const [isAtBottom, setIsAtBottom] = useState<boolean>(true);
+  const [showScrollBottom, setShowScrollBottom] = useState<boolean>(false);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -589,61 +614,45 @@ export const ChatBox = ({
     date: string;
     time: string;
   }>({ date: "", time: "" });
-  const [leaseForm, setLeaseForm] = useState({
-    moveInDate: "",
-    income: "",
-    guarantor: "",
-  });
-  const [signature, setSignature] = useState("");
+
+  const [formStatesByMessage, setFormStatesByMessage] = useState<
+    Record<number, SimpleLeaseFormState>
+  >({});
+
+  const getFormState = (index: number): SimpleLeaseFormState =>
+    formStatesByMessage[index] || EMPTY_FORM_STATE;
+
+  const updateFormState = (
+    index: number,
+    updated: Partial<SimpleLeaseFormState>,
+  ) => {
+    setFormStatesByMessage((prev) => ({
+      ...prev,
+      [index]: { ...getFormState(index), ...updated },
+    }));
+  };
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   const resetConversation = () => {
     setMessages([]);
-    if (typeof window !== "undefined")
-      localStorage.removeItem(STORAGE_KEY_MESSAGES);
-  };
-
-  useEffect(() => {
-    setIsMounted(true);
+    setThreadId(null);
+    setFormStatesByMessage({});
     if (typeof window !== "undefined") {
-      const savedOpen = localStorage.getItem(STORAGE_KEY_OPEN);
-      if (savedOpen) setIsOpen(JSON.parse(savedOpen));
-
-      const savedMinimized = localStorage.getItem(STORAGE_KEY_MINIMIZED);
-      if (savedMinimized) setIsMinimized(JSON.parse(savedMinimized));
-
-      const savedMessages = localStorage.getItem(STORAGE_KEY_MESSAGES);
-      if (savedMessages) setMessages(JSON.parse(savedMessages));
-
-      const savedThread = localStorage.getItem(STORAGE_KEY_THREAD);
-      if (savedThread) setThreadId(savedThread);
+      localStorage.removeItem(STORAGE_KEY_MESSAGES);
+      localStorage.removeItem(STORAGE_KEY_THREAD);
     }
-  }, []);
-
-  // 3. Persist changes back to localStorage when state updates
-  useEffect(() => {
-    if (isMounted && typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_KEY_OPEN, JSON.stringify(isOpen));
-      localStorage.setItem(STORAGE_KEY_MINIMIZED, JSON.stringify(isMinimized));
-      localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages));
-      if (threadId) localStorage.setItem(STORAGE_KEY_THREAD, threadId);
-    }
-  }, [isOpen, isMinimized, messages, threadId, isMounted]);
-
-  // Prevent rendering mismatched local storage UI states until hydration completes
-  if (!isMounted) {
-    return null;
-  }
+  };
 
   const handleSend = async (
     textToSend?: string,
     requestMeta?: { propertyId?: string },
   ) => {
     const messageText = textToSend || input;
-    if (!messageText.trim()) return;
+    if (!messageText.trim() || loading) return;
 
     const newMessages = [
       ...messages,
@@ -676,7 +685,7 @@ export const ChatBox = ({
         ? propertiesPayload
         : [];
 
-      const nestedBookTour = apiResponse?.data?.book_tour;
+      const nestedBookTour = apiResponse?.data?.book_tour_ui;
       const nestedLeaseUi =
         apiResponse?.data?.lease_ui_ui || apiResponse?.data?.lease_ui;
 
@@ -721,6 +730,105 @@ export const ChatBox = ({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    setIsMounted(true);
+    if (typeof window !== "undefined") {
+      const savedOpen = localStorage.getItem(STORAGE_KEY_OPEN);
+      if (savedOpen) setIsOpen(JSON.parse(savedOpen));
+
+      const savedMinimized = localStorage.getItem(STORAGE_KEY_MINIMIZED);
+      if (savedMinimized) setIsMinimized(JSON.parse(savedMinimized));
+
+      const savedMessages = localStorage.getItem(STORAGE_KEY_MESSAGES);
+      if (savedMessages) setMessages(JSON.parse(savedMessages));
+
+      const savedThread = localStorage.getItem(STORAGE_KEY_THREAD);
+      if (savedThread) setThreadId(savedThread);
+    }
+
+    const handleOpenAgent = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      const prefillMessage =
+        detail?.prefill || detail?.message || detail?.text || detail?.query;
+      setIsOpen(true);
+      setIsMinimized(false);
+      if (prefillMessage) {
+        setTimeout(() => {
+          handleSend(prefillMessage);
+        }, 200);
+      }
+    };
+
+    window.addEventListener("open-agent-chat", handleOpenAgent);
+    return () => {
+      window.removeEventListener("open-agent-chat", handleOpenAgent);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (isMounted && typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_KEY_OPEN, JSON.stringify(isOpen));
+      localStorage.setItem(STORAGE_KEY_MINIMIZED, JSON.stringify(isMinimized));
+      localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages));
+      if (threadId) localStorage.setItem(STORAGE_KEY_THREAD, threadId);
+    }
+  }, [isOpen, isMinimized, messages, threadId, isMounted]);
+
+  // Scroll handler to detect if the user scrolled up
+  const handleScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    const distanceToBottom = scrollHeight - (scrollTop + clientHeight);
+    const atBottom = distanceToBottom < 80;
+
+    setIsAtBottom(atBottom);
+    if (atBottom) {
+      setShowScrollBottom(false);
+      setUnreadCount(0);
+    }
+  };
+
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+    setShowScrollBottom(false);
+    setUnreadCount(0);
+    setIsAtBottom(true);
+  };
+
+  // Smart auto-scroll effect: only scroll down on new messages if user was already at bottom or sent it
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (!last) return;
+
+    if (last.role === "user") {
+      scrollToBottom("smooth");
+    } else if (isAtBottom) {
+      scrollToBottom("smooth");
+    } else {
+      // User is scrolled up and received an assistant reply
+      setShowScrollBottom(true);
+      setUnreadCount((prev) => prev + 1);
+    }
+  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (last?.role === "assistant" && (!isOpen || isMinimized)) {
+      setHasUnread(true);
+    }
+  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (isOpen && !isMinimized) {
+      setHasUnread(false);
+      setTimeout(() => scrollToBottom("auto"), 50);
+    }
+  }, [isOpen, isMinimized]);
+
+  if (!isMounted) {
+    return null;
+  }
 
   const updateMessageLeaseState = (
     messageIndex: number,
@@ -793,8 +901,11 @@ export const ChatBox = ({
           aria-label="Open agent chat"
           className="fixed bottom-5 right-5 z-50 inline-flex items-center gap-2 rounded-full border border-white/10 bg-[var(--ink-soft)]/90 px-3.5 py-2.5 text-sm font-medium text-slate-100 shadow-xl backdrop-blur transition-all hover:border-[var(--amber)]/40 hover:bg-[var(--ink-soft)]"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--amber)]/15 text-[var(--amber)]">
+          <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-[var(--amber)]/15 text-[var(--amber)]">
             <Bot size={16} />
+            {hasUnread && (
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-[var(--ink-soft)]" />
+            )}
           </div>
           <span className="hidden sm:inline">Ask HousePadi</span>
         </button>
@@ -803,8 +914,11 @@ export const ChatBox = ({
       {isOpen && isMinimized && (
         <div className="fixed bottom-5 right-5 z-50">
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[var(--ink-soft)]/95 px-3 py-2 shadow-xl backdrop-blur">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--amber)]/15 text-[var(--amber)]">
+            <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-[var(--amber)]/15 text-[var(--amber)]">
               <Bot size={16} />
+              {hasUnread && (
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-[var(--ink-soft)]" />
+              )}
             </div>
             <span className="text-sm font-medium text-slate-100">
               HousePadi Agent
@@ -833,7 +947,7 @@ export const ChatBox = ({
       {isOpen && !isMinimized && (
         <div className="fixed z-50 inset-x-4 bottom-4 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[420px] max-w-full">
           <div
-            className="bg-[var(--ink-soft)] border border-[var(--amber)]/25 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+            className="bg-[var(--ink-soft)] border border-[var(--amber)]/25 rounded-3xl overflow-hidden shadow-2xl flex flex-col relative"
             style={{ height: "min(75vh, 650px)" }}
           >
             {/* Header */}
@@ -847,14 +961,35 @@ export const ChatBox = ({
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
+                {messages.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (
+                        typeof window === "undefined" ||
+                        window.confirm(
+                          "Start a new conversation? This clears the current chat.",
+                        )
+                      ) {
+                        resetConversation();
+                      }
+                    }}
+                    aria-label="Clear conversation"
+                    title="Clear conversation"
+                    className="rounded-full p-1 text-slate-500 hover:text-white"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
                 <button
                   onClick={() => setIsMinimized(true)}
+                  aria-label="Minimize chat"
                   className="rounded-full p-1 text-slate-500 hover:text-white"
                 >
                   <ChevronDown size={16} />
                 </button>
                 <button
                   onClick={() => setIsOpen(false)}
+                  aria-label="Close chat"
                   className="rounded-full p-1 text-slate-500 hover:text-white"
                 >
                   <X size={16} />
@@ -862,20 +997,59 @@ export const ChatBox = ({
               </div>
             </div>
 
+            {/* Scroll-to-Bottom Floating Indicator */}
+            {showScrollBottom && (
+              <button
+                onClick={() => scrollToBottom("smooth")}
+                className="absolute bottom-20 right-6 z-20 flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[var(--ink)]/95 border border-[var(--amber)]/40 text-[var(--amber)] text-xs font-medium shadow-xl backdrop-blur hover:bg-[var(--ink-soft)] transition-all animate-bounce"
+                aria-label="Scroll to latest messages"
+              >
+                <ArrowDown size={14} />
+                <span>New messages</span>
+                {unreadCount > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-[var(--amber)] text-[var(--ink)] font-bold text-[10px] flex items-center justify-center">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             {/* Scrollable Message Stream */}
             <div
               ref={scrollRef}
+              onScroll={handleScroll}
               className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 bg-black/20"
+              aria-live="polite"
             >
               {messages.length === 0 && (
-                <div className="text-center text-slate-400 text-xs py-8 space-y-2">
-                  <p className="font-semibold text-white">
-                    How can I assist you today?
-                  </p>
-                  <p>
-                    Ask me to find apartments, schedule viewings, or start your
-                    lease application directly!
-                  </p>
+                <div className="text-center text-slate-400 text-xs py-8 space-y-4">
+                  <div className="w-10 h-10 rounded-full bg-[var(--amber)]/15 text-[var(--amber)] flex items-center justify-center mx-auto border border-[var(--amber)]/30">
+                    <Bot size={20} />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-semibold text-white text-sm">
+                      How can I assist you today?
+                    </p>
+                    <p className="text-slate-400">
+                      Ask me to find apartments, schedule viewings, or start your
+                      lease application!
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 justify-center pt-2">
+                    {[
+                      "Find 2-bedroom apartments",
+                      "Schedule a property tour",
+                      "How do I apply for a lease?",
+                    ].map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        onClick={() => handleSend(suggestion)}
+                        className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-slate-200 hover:border-[var(--amber)]/40 hover:text-[var(--amber)] transition text-[11px]"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -890,7 +1064,6 @@ export const ChatBox = ({
                     {renderMessageContent(m.content)}
                   </div>
 
-                  {/* 1. PROPERTY CARDS & PER-PROPERTY ACTION BUTTONS */}
                   {m.role === "assistant" &&
                     m.properties &&
                     m.properties.length > 0 && (
@@ -911,14 +1084,13 @@ export const ChatBox = ({
                                   </p>
                                 )}
                               </div>
-                              {prop.price && (
+                              {prop.price !== undefined && (
                                 <span className="text-[var(--amber)] font-bold text-xs shrink-0">
-                                  ₦{prop.price.toLocaleString()}
+                                  {formatPrice(prop.price, prop.currency)}
                                 </span>
                               )}
                             </div>
 
-                            {/* Action Buttons for Each Property */}
                             <div className="space-y-1.5 pt-1 border-t border-white/5">
                               <div className="flex gap-2">
                                 <button
@@ -952,7 +1124,6 @@ export const ChatBox = ({
                       </div>
                     )}
 
-                  {/* 2. REDIRECT URL ACTION BUTTON */}
                   {m.role === "assistant" && m.redirectUrl && (
                     <div className="pl-1 pt-1">
                       <button
@@ -964,9 +1135,8 @@ export const ChatBox = ({
                     </div>
                   )}
 
-                  {/* 3. TOUR CALENDAR SELECTION WIDGET */}
                   {m.role === "assistant" &&
-                    (m.tourUi?.ui_component === "calendar" ||
+                    (m.tourUi?.ui_component === "calendar_picker" ||
                       m.tourUi?.action === "awaiting_datetime") && (
                       <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
                         <p className="font-bold text-[var(--amber)] uppercase tracking-wider flex items-center gap-1.5">
@@ -996,7 +1166,11 @@ export const ChatBox = ({
                         />
                         <button
                           onClick={submitTourSelection}
-                          disabled={!tourSelection.date || !tourSelection.time}
+                          disabled={
+                            !tourSelection.date ||
+                            !tourSelection.time ||
+                            loading
+                          }
                           className="w-full py-2.5 bg-[var(--amber)] font-bold text-[var(--ink)] rounded-xl disabled:opacity-50"
                         >
                           Confirm Tour Request
@@ -1004,7 +1178,6 @@ export const ChatBox = ({
                       </div>
                     )}
 
-                  {/* 4. LEASE APPLICATION FORM WIDGET */}
                   {m.role === "assistant" &&
                     m.leaseUi?.ui_component === "application_form" && (
                       <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
@@ -1013,53 +1186,44 @@ export const ChatBox = ({
                         </p>
                         <input
                           type="date"
-                          value={leaseForm.moveInDate}
+                          value={getFormState(i).moveInDate}
                           onChange={(e) =>
-                            setLeaseForm({
-                              ...leaseForm,
-                              moveInDate: e.target.value,
-                            })
+                            updateFormState(i, { moveInDate: e.target.value })
                           }
                           className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
                         />
                         <input
                           type="number"
                           placeholder="Monthly Income"
-                          value={leaseForm.income}
+                          value={getFormState(i).income}
                           onChange={(e) =>
-                            setLeaseForm({
-                              ...leaseForm,
-                              income: e.target.value,
-                            })
+                            updateFormState(i, { income: e.target.value })
                           }
                           className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
                         />
                         <input
                           type="text"
                           placeholder="Guarantor Name"
-                          value={leaseForm.guarantor}
+                          value={getFormState(i).guarantor}
                           onChange={(e) =>
-                            setLeaseForm({
-                              ...leaseForm,
-                              guarantor: e.target.value,
-                            })
+                            updateFormState(i, { guarantor: e.target.value })
                           }
                           className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white"
                         />
                         <button
+                          disabled={loading}
                           onClick={() =>
                             handleSend(
-                              `Submit application: Move-in=${leaseForm.moveInDate}, Income=${leaseForm.income}, Guarantor=${leaseForm.guarantor}`,
+                              `Submit application: Move-in=${getFormState(i).moveInDate}, Income=${getFormState(i).income}, Guarantor=${getFormState(i).guarantor}`,
                             )
                           }
-                          className="w-full py-2.5 bg-[var(--amber)] font-bold text-[var(--ink)] rounded-xl"
+                          className="w-full py-2.5 bg-[var(--amber)] font-bold text-[var(--ink)] rounded-xl disabled:opacity-50"
                         >
                           Submit Application
                         </button>
                       </div>
                     )}
 
-                  {/* 5. SIGNATURE PAD WIDGET */}
                   {m.role === "assistant" &&
                     m.leaseUi?.ui_component === "signature_pad" && (
                       <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
@@ -1069,17 +1233,21 @@ export const ChatBox = ({
                         <input
                           type="text"
                           placeholder="Type Legal Name to Sign"
-                          value={signature}
-                          onChange={(e) => setSignature(e.target.value)}
+                          value={getFormState(i).signature}
+                          onChange={(e) =>
+                            updateFormState(i, { signature: e.target.value })
+                          }
                           className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white font-serif italic"
                         />
                         <button
                           onClick={() =>
                             handleSend(
-                              `Sign lease agreement: signature=${signature}`,
+                              `Sign lease agreement: signature=${getFormState(i).signature}`,
                             )
                           }
-                          disabled={!signature.trim()}
+                          disabled={
+                            !getFormState(i).signature.trim() || loading
+                          }
                           className="w-full py-2.5 bg-[var(--amber)] font-bold text-[var(--ink)] rounded-xl disabled:opacity-50"
                         >
                           Sign Agreement
@@ -1087,7 +1255,6 @@ export const ChatBox = ({
                       </div>
                     )}
 
-                  {/* 6. PAYMENT GATEWAY WIDGET */}
                   {m.role === "assistant" &&
                     m.leaseUi?.ui_component === "payment_gateway" && (
                       <div className="w-full max-w-[90%] bg-black/40 border border-[var(--amber)]/30 rounded-2xl p-4 space-y-3 text-xs text-slate-200">
@@ -1098,7 +1265,7 @@ export const ChatBox = ({
                         <p className="text-slate-400">
                           Total Due:{" "}
                           <strong className="text-white">
-                            ₦{m.leaseUi.amount?.toLocaleString()}
+                            {formatPrice(m.leaseUi.amount, m.leaseUi.currency)}
                           </strong>
                         </p>
                         <button
@@ -1107,14 +1274,14 @@ export const ChatBox = ({
                               `Complete payment for lease ${m.leaseUi?.lease_id}`,
                             )
                           }
-                          className="w-full py-2.5 bg-emerald-500 font-bold text-black rounded-xl"
+                          disabled={loading}
+                          className="w-full py-2.5 bg-emerald-500 font-bold text-black rounded-xl disabled:opacity-50"
                         >
                           Authorize Payment
                         </button>
                       </div>
                     )}
 
-                  {/* 7. INTERACTIVE INLINE LEASE SIGNER & FLOW WITH PERSISTENT STATE */}
                   {m.role === "assistant" &&
                     m.leaseUi?.ui_component === "lease_application_signer" &&
                     m.leaseUi?.property_id && (
@@ -1127,6 +1294,14 @@ export const ChatBox = ({
                             .find((p) => p.id === m.leaseUi?.property_id)
                             ?.price ||
                           500000
+                        }
+                        currency={
+                          m.leaseUi.currency ||
+                          messages
+                            .flatMap((msg) => msg.properties || [])
+                            .find((p) => p.id === m.leaseUi?.property_id)
+                            ?.currency ||
+                          "NGN"
                         }
                         leaseUi={m.leaseUi}
                         onStateChange={(updatedFields) =>
@@ -1147,6 +1322,8 @@ export const ChatBox = ({
                   <span>{activeLoaderText}</span>
                 </div>
               )}
+
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Chat Input */}
@@ -1156,16 +1333,25 @@ export const ChatBox = ({
                   ref={inputRef}
                   type="text"
                   value={input}
+                  disabled={loading}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && !loading && handleSend()
+                  }
                   placeholder="Type a message or ask to apply..."
-                  className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-[var(--amber)]/50"
+                  className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-[var(--amber)]/50 disabled:opacity-60"
                 />
                 <button
                   onClick={() => handleSend()}
-                  className="p-2.5 bg-[var(--amber)] text-[var(--ink)] rounded-2xl font-bold hover:bg-[var(--amber-soft)]"
+                  disabled={loading || !input.trim()}
+                  aria-label="Send message"
+                  className="p-2.5 bg-[var(--amber)] text-[var(--ink)] rounded-2xl font-bold hover:bg-[var(--amber-soft)] disabled:opacity-50 disabled:hover:bg-[var(--amber)]"
                 >
-                  <Send size={15} />
+                  {loading ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    <Send size={15} />
+                  )}
                 </button>
               </div>
             </div>

@@ -23,6 +23,8 @@ const isAccessTokenExpired = (token: string | null) => {
   }
 };
 
+export const dynamic = 'force-dynamic';
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();

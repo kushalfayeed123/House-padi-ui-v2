@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { authService } from "@/app/service/authService";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
@@ -25,7 +25,7 @@ const isAccessTokenExpired = (token: string | null) => {
 
 export const dynamic = 'force-dynamic';
 
-export default function LoginPage() {
+function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refreshProfile, user } = useAuth();
@@ -197,5 +197,22 @@ export default function LoginPage() {
         </button>
       </form>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center bg-[var(--ink)] p-6">
+          <div className="flex items-center gap-2 text-white">
+            <Loader2 className="animate-spin" size={24} />
+            <span>Loading...</span>
+          </div>
+        </main>
+      }
+    >
+      <LoginFormContent />
+    </Suspense>
   );
 }

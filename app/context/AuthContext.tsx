@@ -29,7 +29,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const { data } = await apiClient.get("/api/profile");
       if (data && data.profile) {
-        setUser(data.profile); // Maps directly to your public.profiles columns
+        const profile = data.profile;
+
+        // Check if a different user is logging in on this browser
+        const previousChatUserId = localStorage.getItem("housepadi_chat_user_id");
+        if (previousChatUserId && previousChatUserId !== profile.id) {
+          // Clear previous user's chat session data
+          localStorage.removeItem("housepadi_chat_messages");
+          localStorage.removeItem("housepadi_thread_id");
+          localStorage.removeItem("housepadi_chat_minimized");
+          localStorage.removeItem("housepadi_chat_open");
+        }
+
+        // Bind current chat session to this user ID
+        localStorage.setItem("housepadi_chat_user_id", profile.id);
+
+        setUser(profile); // Maps directly to your public.profiles columns
       } else {
         setUser(null);
       }

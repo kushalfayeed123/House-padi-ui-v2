@@ -900,7 +900,7 @@ export const RenterDashboard = () => {
                   userId={user?.id || ""}
                 />
               )}
-              ;
+              
             </div>
           ) : activeTab === "saved" ? (
             savedStatus === "available" && savedProperties.length > 0 ? (

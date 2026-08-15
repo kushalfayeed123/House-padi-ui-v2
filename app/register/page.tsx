@@ -6,6 +6,7 @@ import { authService } from "@/app/service/authService";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { RegisterData } from "../types/auth";
+import Link from "next/link";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -126,6 +127,16 @@ export default function RegisterPage() {
             "Complete registration"
           )}
         </button>
+
+        <p className="text-center text-xs text-slate-400 mt-6">
+          Already have an account?{" "}
+          <Link
+            href="/login"
+            className="text-[var(--amber)] hover:underline font-medium"
+          >
+            Sign in
+          </Link>
+        </p>
       </form>
     </main>
   );

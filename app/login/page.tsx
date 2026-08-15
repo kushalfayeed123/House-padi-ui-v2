@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
 import { Loader2 } from "lucide-react";
 import { AuthResponse } from "@/app/types/auth";
+import Link from "next/link";
 
 const isAccessTokenExpired = (token: string | null) => {
   if (!token) return true;
@@ -174,20 +175,30 @@ function LoginFormContent() {
               setFormData({ ...formData, email: e.target.value })
             }
           />
-          <input
-            type="password"
-            placeholder="Password"
-            required
-            className="w-full bg-black/30 border border-white/10 p-4 rounded-xl text-white placeholder:text-slate-600 focus:outline-none focus:border-[var(--amber)]/50 transition-colors"
-            onChange={(e) =>
-              setFormData({ ...formData, password: e.target.value })
-            }
-          />
+          <div className="space-y-1">
+            <input
+              type="password"
+              placeholder="Password"
+              required
+              className="w-full bg-black/30 border border-white/10 p-4 rounded-xl text-white placeholder:text-slate-600 focus:outline-none focus:border-[var(--amber)]/50 transition-colors"
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
+            />
+            <div className="flex justify-end pt-1">
+              <Link
+                href="/forgot-password"
+                className="text-xs text-slate-400 hover:text-[var(--amber)] transition-colors"
+              >
+                Forgot password?
+              </Link>
+            </div>
+          </div>
         </div>
 
         <button
           disabled={isLoading}
-          className="w-full mt-8 bg-[var(--amber)] hover:bg-[var(--amber-soft)] py-4 rounded-xl font-semibold text-[var(--ink)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="w-full mt-6 bg-[var(--amber)] hover:bg-[var(--amber-soft)] py-4 rounded-xl font-semibold text-[var(--ink)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {isLoading ? (
             <Loader2 className="animate-spin" size={20} />
@@ -195,6 +206,16 @@ function LoginFormContent() {
             "Sign in"
           )}
         </button>
+
+        <p className="text-center text-xs text-slate-400 mt-6">
+          Don`t have an account?{" "}
+          <Link
+            href="/register"
+            className="text-[var(--amber)] hover:underline font-medium"
+          >
+            Create account
+          </Link>
+        </p>
       </form>
     </main>
   );

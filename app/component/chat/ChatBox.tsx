@@ -658,6 +658,7 @@ export const ChatBox = ({
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState<boolean>(false);
   const [hasUnread, setHasUnread] = useState<boolean>(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   // Smart Scroll states
   const [isAtBottom, setIsAtBottom] = useState<boolean>(true);
@@ -1004,25 +1005,38 @@ export const ChatBox = ({
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
-                {messages.length > 0 && (
-                  <button
-                    onClick={() => {
-                      if (
-                        typeof window === "undefined" ||
-                        window.confirm(
-                          "Start a new conversation? This clears the current chat.",
-                        )
-                      ) {
-                        resetConversation();
-                      }
-                    }}
-                    aria-label="Clear conversation"
-                    title="Clear conversation"
-                    className="rounded-full p-1 text-slate-500 hover:text-white"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                )}
+                {messages.length > 0 &&
+                  (isConfirming ? (
+                    <div className="flex items-center gap-1.5 bg-slate-800 px-2 py-1 rounded-md border border-slate-700 text-xs shadow-lg animate-in fade-in duration-150">
+                      <span className="text-slate-300 whitespace-nowrap">
+                        Clear chat?
+                      </span>
+                      <button
+                        onClick={() => {
+                          resetConversation();
+                          setIsConfirming(false);
+                        }}
+                        className="px-2 py-0.5 bg-red-600 text-white font-medium rounded hover:bg-red-500 transition-colors"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setIsConfirming(false)}
+                        className="px-2 py-0.5 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 transition-colors"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setIsConfirming(true)}
+                      aria-label="Clear conversation"
+                      title="Clear conversation"
+                      className="rounded-full p-1 text-slate-500 hover:text-white transition-colors"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  ))}
                 <button
                   onClick={() => setIsMinimized(true)}
                   aria-label="Minimize chat"
@@ -1074,14 +1088,14 @@ export const ChatBox = ({
                       How can I assist you today?
                     </p>
                     <p className="text-slate-400">
-                      Ask me to find apartments, schedule viewings, or start your
-                      lease application!
+                      Ask me to find apartments, schedule viewings, or start
+                      your lease application!
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-1.5 justify-center pt-2">
                     {[
                       "Find 2-bedroom apartments",
-                      "Schedule a property tour",
+                      "What documents do I need to rent an apartment?",
                       "How do I apply for a lease?",
                     ].map((suggestion) => (
                       <button

@@ -1,5 +1,11 @@
 "use client";
-import { useState, useRef, useEffect, type ReactNode, SetStateAction } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  type ReactNode,
+  SetStateAction,
+} from "react";
 import {
   Send,
   Bot,
@@ -98,7 +104,6 @@ const LEASE_UI_COMPONENTS = new Set([
   "lease_completed",
   "lease_application_signer",
 ]);
-
 
 // Caches the in-flight/resolved property details Promise by property_id,
 // not just the resolved value — this is what actually dedupes concurrent
@@ -332,17 +337,17 @@ const InlineLeaseWidget = ({
   const [amountLoading, setAmountLoading] = useState(true);
   const [amountError, setAmountError] = useState<string | null>(null);
 
-useEffect(() => {
+  useEffect(() => {
     let cancelled = false;
     setAmountLoading(true);
     setAmountError(null);
 
     fetchPropertyDetailsCached(propertyId)
-      .then((details: { price: SetStateAction<number>; currency: SetStateAction<string>; }) => {
+      .then((details) => {
         if (cancelled) return;
-        if (typeof details.price === "number") setAmount(details.price);
-        if (details.currency) setDisplayCurrency(details.currency);
-        if (typeof details.price !== "number") {
+        if (typeof details?.price === "number") setAmount(details.price);
+        if (details?.currency) setDisplayCurrency(details.currency);
+        if (typeof details?.price !== "number") {
           setAmountError("Couldn't confirm the exact rent for this property.");
         }
       })
@@ -556,7 +561,8 @@ useEffect(() => {
 
       {amountError && (
         <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300">
-          {amountError} Please refresh before continuing — we won't let you sign or pay against an unconfirmed amount.
+          {amountError} Please refresh before continuing — we won't let you sign
+          or pay against an unconfirmed amount.
         </div>
       )}
 
@@ -568,7 +574,10 @@ useEffect(() => {
                 Proposed Start Date
               </label>
               <span className="text-[var(--amber)] font-mono">
-                Rent: {amountLoading ? "Confirming…" : formatPrice(totalPayment, displayCurrency)}
+                Rent:{" "}
+                {amountLoading
+                  ? "Confirming…"
+                  : formatPrice(totalPayment, displayCurrency)}
               </span>
             </div>
             <input
@@ -589,7 +598,10 @@ useEffect(() => {
             </p>
             By signing below, you commit to leasing this property starting from{" "}
             {startDate || "the specified date"} for the total amount of{" "}
-            {amountLoading ? "the rent shown above" : formatPrice(totalPayment, displayCurrency)}.
+            {amountLoading
+              ? "the rent shown above"
+              : formatPrice(totalPayment, displayCurrency)}
+            .
           </div>
 
           <div className="space-y-1">
@@ -612,7 +624,12 @@ useEffect(() => {
 
           <button
             type="submit"
-            disabled={loading || !renterSignature.trim() || !startDate || !amountConfirmed}
+            disabled={
+              loading ||
+              !renterSignature.trim() ||
+              !startDate ||
+              !amountConfirmed
+            }
             className="w-full py-2.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50"
           >
             {loading ? (
@@ -668,7 +685,9 @@ useEffect(() => {
             <div className="flex justify-between text-slate-400">
               <span>Total Property Rent</span>
               <span className="text-white font-mono">
-                {amountLoading ? "Confirming…" : formatPrice(totalPayment, displayCurrency)}
+                {amountLoading
+                  ? "Confirming…"
+                  : formatPrice(totalPayment, displayCurrency)}
               </span>
             </div>
           </div>

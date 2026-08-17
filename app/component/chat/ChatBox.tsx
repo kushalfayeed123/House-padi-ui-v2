@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect, type ReactNode } from "react";
+import { useState, useRef, useEffect, type ReactNode, SetStateAction } from "react";
 import {
   Send,
   Bot,
@@ -99,6 +99,40 @@ const LEASE_UI_COMPONENTS = new Set([
   "lease_application_signer",
 ]);
 
+
+// Caches the in-flight/resolved property details Promise by property_id,
+// not just the resolved value — this is what actually dedupes concurrent
+// fetches for the same property (multiple InlineLeaseWidget instances for
+// one property_id, or React Strict Mode's double effect-invoke in dev),
+// rather than just avoiding sequential re-fetches. It also guarantees the
+// rent amount stays identical across every step of one apply-to-pay flow
+// within a session — a second fetch mid-flow could otherwise surface a
+// different number if the listing's price changed in the meantime, which
+// would be a real inconsistency in a money-related flow, not just noise.
+const propertyDetailsCache = new Map<
+  string,
+  Promise<{ price?: number; currency?: string }>
+>();
+
+const fetchPropertyDetailsCached = (propertyId: string) => {
+  if (!propertyDetailsCache.has(propertyId)) {
+    const request = apiClient
+      .get(`/api/property/${propertyId}`)
+      .then((res) => ({
+        price: typeof res.data?.price === "number" ? res.data.price : undefined,
+        currency: res.data?.currency as string | undefined,
+      }))
+      .catch((err) => {
+        // Don't cache failures — a transient network error shouldn't
+        // permanently block every future widget for this property.
+        propertyDetailsCache.delete(propertyId);
+        throw err;
+      });
+    propertyDetailsCache.set(propertyId, request);
+  }
+  return propertyDetailsCache.get(propertyId)!;
+};
+
 /**
  * Scans every value under the response's `data` object for one shaped like
  * a UI signal (i.e. it has a `ui_component` field) and routes it to the
@@ -137,6 +171,7 @@ const extractUiSignal = (
       };
     }
 
+    console.log(uiComponent, LEASE_UI_COMPONENTS.has(uiComponent));
     if (LEASE_UI_COMPONENTS.has(uiComponent)) {
       return {
         leaseUi: {
@@ -247,7 +282,7 @@ const renderMessageContent = (content: string): ReactNode[] => {
 
 const InlineLeaseWidget = ({
   propertyId,
-  initialAmount = 500000,
+  initialAmount = 0,
   currency = "NGN",
   leaseUi,
   onStateChange,
@@ -279,7 +314,57 @@ const InlineLeaseWidget = ({
   );
 
   const [paymentInitialized, setPaymentInitialized] = useState(false);
-  const totalPayment = initialAmount;
+
+  // The rent amount is fetched fresh from the property record rather than
+  // trusted from props — initialAmount/currency previously came from
+  // either the backend's UI-fallback payload (which never actually
+  // includes an amount — see submit_application_worker's ToolUIFallback,
+  // it only passes through property_id) or a client-side scrape of
+  // whatever property cards happened to render earlier in this chat
+  // session, which silently fell back to a hardcoded 500000 whenever
+  // neither source had the property (e.g. applying from a property detail
+  // page rather than an in-chat search result). Showing — or letting
+  // someone sign against — the wrong rent amount is a correctness issue,
+  // not just a display one, so this fetches the real value from the
+  // source of truth before anything renders it.
+  const [amount, setAmount] = useState<number>(initialAmount);
+  const [displayCurrency, setDisplayCurrency] = useState<string>(currency);
+  const [amountLoading, setAmountLoading] = useState(true);
+  const [amountError, setAmountError] = useState<string | null>(null);
+
+useEffect(() => {
+    let cancelled = false;
+    setAmountLoading(true);
+    setAmountError(null);
+
+    fetchPropertyDetailsCached(propertyId)
+      .then((details: { price: SetStateAction<number>; currency: SetStateAction<string>; }) => {
+        if (cancelled) return;
+        if (typeof details.price === "number") setAmount(details.price);
+        if (details.currency) setDisplayCurrency(details.currency);
+        if (typeof details.price !== "number") {
+          setAmountError("Couldn't confirm the exact rent for this property.");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAmountError("Couldn't confirm the exact rent for this property.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAmountLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [propertyId]);
+
+  const totalPayment = amount;
+  // Never let someone submit/sign against an unconfirmed or failed price
+  // fetch — showing "Loading…" or an explicit error is safer than
+  // silently proceeding on a guessed number.
+  const amountConfirmed = !amountLoading && !amountError;
 
   const handleApplyAndSign = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -469,6 +554,12 @@ const InlineLeaseWidget = ({
         </div>
       )}
 
+      {amountError && (
+        <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300">
+          {amountError} Please refresh before continuing — we won't let you sign or pay against an unconfirmed amount.
+        </div>
+      )}
+
       {step === 1 && !applicationId && (
         <form onSubmit={handleApplyAndSign} className="space-y-3">
           <div className="space-y-1">
@@ -477,7 +568,7 @@ const InlineLeaseWidget = ({
                 Proposed Start Date
               </label>
               <span className="text-[var(--amber)] font-mono">
-                Rent: {formatPrice(totalPayment, currency)}
+                Rent: {amountLoading ? "Confirming…" : formatPrice(totalPayment, displayCurrency)}
               </span>
             </div>
             <input
@@ -498,7 +589,7 @@ const InlineLeaseWidget = ({
             </p>
             By signing below, you commit to leasing this property starting from{" "}
             {startDate || "the specified date"} for the total amount of{" "}
-            {formatPrice(totalPayment, currency)}.
+            {amountLoading ? "the rent shown above" : formatPrice(totalPayment, displayCurrency)}.
           </div>
 
           <div className="space-y-1">
@@ -521,11 +612,13 @@ const InlineLeaseWidget = ({
 
           <button
             type="submit"
-            disabled={loading || !renterSignature.trim() || !startDate}
+            disabled={loading || !renterSignature.trim() || !startDate || !amountConfirmed}
             className="w-full py-2.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50"
           >
             {loading ? (
               <Loader2 size={14} className="animate-spin" />
+            ) : amountLoading ? (
+              "Confirming rent amount…"
             ) : (
               <>
                 Submit Application & Sign <ShieldCheck size={14} />
@@ -575,7 +668,7 @@ const InlineLeaseWidget = ({
             <div className="flex justify-between text-slate-400">
               <span>Total Property Rent</span>
               <span className="text-white font-mono">
-                {formatPrice(totalPayment, currency)}
+                {amountLoading ? "Confirming…" : formatPrice(totalPayment, displayCurrency)}
               </span>
             </div>
           </div>
@@ -583,8 +676,8 @@ const InlineLeaseWidget = ({
           {!paymentInitialized ? (
             <button
               onClick={handleInitializePayment}
-              disabled={loading}
-              className="w-full py-2.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5"
+              disabled={loading || !amountConfirmed}
+              className="w-full py-2.5 bg-[var(--amber)] hover:bg-[var(--amber-soft)] text-[var(--ink)] font-bold rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50"
             >
               {loading ? (
                 <Loader2 size={14} className="animate-spin" />

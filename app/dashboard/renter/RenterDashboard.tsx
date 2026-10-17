@@ -2,10 +2,17 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
 import { AuthGuard } from "../../component/auth/AuthGuard";
 import { Header } from "@/app/component/ui/Header";
 import { apiClient } from "@/app/lib/api-client";
 import { LeaseFlowModal } from "@/app/component/modals/LeaseFlowModal";
+import {
+  MessageThreadsPanel,
+  asArray,
+  type ChatThread,
+  type ThreadMessage,
+} from "@/app/component/chat/MessageThreadsPanel";
 import { useAuth } from "@/app/context/AuthContext";
 
 type RenterTour = {
@@ -51,38 +58,39 @@ type Announcement = {
   property_title?: string;
 };
 
-// Direct-message threads exposed by /api/chat/threads. Field names are read
-// defensively (`title ?? subject`, `content ?? message`) so the UI keeps
-// working whichever alias the backend returns.
-type ChatThread = {
-  id: string;
-  title?: string;
-  subject?: string;
-  property_title?: string;
-  last_message?: string;
-  updated_at?: string;
-  created_at?: string;
-};
-
-type ThreadMessage = {
-  id: string;
-  sender_id?: string;
-  sender_role?: string;
-  content?: string;
+type KycStatus = {
+  status: string;
   message?: string;
+  rejection_reason?: string;
+  submitted_at?: string;
+  updated_at?: string;
+};
+
+type WalletTransaction = {
+  id: string;
+  amount: number;
+  platform_fee?: number;
+  type?: string;
+  status?: string;
+  currency?: string;
+  reference?: string;
   created_at?: string;
 };
 
-const threadTitle = (thread: ChatThread): string =>
-  thread.title || thread.subject || thread.property_title || "Conversation";
-
-const threadTimestamp = (thread: ChatThread): string =>
-  thread.updated_at || thread.created_at || "";
-
-const messageBody = (message: ThreadMessage): string =>
-  message.content || message.message || "";
-
-const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+const kycLabel = (status?: string): string => {
+  switch (status) {
+    case "verified":
+      return "Verified";
+    case "pending":
+      return "In review";
+    case "rejected":
+      return "Action needed";
+    case "not_submitted":
+      return "Not started";
+    default:
+      return "Unknown";
+  }
+};
 
 // "checking": request in flight. "available": the feature actually works —
 // real data, not a placeholder. "unavailable": nothing to show yet, either
@@ -174,11 +182,10 @@ const PENDING_ENDPOINTS: EndpointCheckDef[] = [
   },
 ];
 
-// These three are fetched once by loadOptionalFeatures (they're real
-// feature checks, not just debug scaffolding) — the debug effect only
-// covers the remaining two so nothing gets fetched twice.
-const DEBUG_ONLY_LIVE_KEYS = new Set(["kyc_status_get", "wallet_history_get"]);
-
+// Every GET endpoint listed above is now implemented on the backend and is
+// fetched once by loadOptionalFeatures below — that single pass also feeds the
+// dev-only status table, so nothing is requested twice.
+//
 // Only ever true outside production, or with an explicit opt-in — never
 // shown to a real renter by accident.
 const isDebugMode =
@@ -188,6 +195,7 @@ const isDebugMode =
 const TAB_KEYS = [
   "overview",
   "rented",
+  "wallet",
   "tours",
   "applications",
   "saved",
@@ -199,12 +207,13 @@ const TAB_KEYS = [
 const TAB_LABELS: Record<string, string> = {
   overview: "Overview",
   rented: "Rented",
+  wallet: "Wallet",
   tours: "Tours",
   applications: "Applications",
   saved: "Saved",
   announcements: "Notices",
   messages: "Messages",
-  pending: "Pending Endpoints",
+  pending: "Endpoint status",
 };
 
 const formatDate = (value: string) => {
@@ -277,6 +286,14 @@ const openAssistant = () => {
   window.dispatchEvent(new CustomEvent("open-agent-chat"));
 };
 
+// Opens the assistant with a pre-filled prompt (used by the KYC banner so the
+// user lands straight in the verification flow).
+const openAssistantWith = (prefill: string) => {
+  window.dispatchEvent(
+    new CustomEvent("open-agent-chat", { detail: { prefill } }),
+  );
+};
+
 // Shared helper for turning a Promise.allSettled result into a debug-table
 // status + detail pair — used by both the optional-features effect (for
 // the three keys it already fetches) and the dedicated debug effect (for
@@ -289,167 +306,6 @@ const statusAndDetail = (
   return ["unavailable", httpStatus ? `HTTP ${httpStatus}` : "no response"];
 };
 
-const MessagesPanel = ({
-  threads,
-  activeThreadId,
-  messages,
-  loading,
-  error,
-  replyText,
-  sendingReply,
-  userId,
-  messagingAvailable,
-  onSelectThread,
-  onReplyChange,
-  onSendReply,
-  onOpenAssistant,
-}: {
-  threads: ChatThread[];
-  activeThreadId: string | null;
-  messages: ThreadMessage[];
-  loading: boolean;
-  error: string | null;
-  replyText: string;
-  sendingReply: boolean;
-  userId?: string;
-  messagingAvailable: boolean;
-  onSelectThread: (threadId: string) => void;
-  onReplyChange: (value: string) => void;
-  onSendReply: (e: React.FormEvent) => void;
-  onOpenAssistant: () => void;
-}) => {
-  if (!messagingAvailable) {
-    return (
-      <EmptyState
-        title="Direct messaging is on its way"
-        body="A dedicated inbox for messaging your landlord is coming soon. In the meantime, the assistant in the corner can pass along questions, schedule tours, and help with your application."
-        action={
-          <button
-            onClick={onOpenAssistant}
-            className="inline-block rounded-xl bg-(--amber) px-5 py-2.5 text-sm font-semibold text-(--ink) hover:bg-(--amber-soft) transition"
-          >
-            Chat with the assistant
-          </button>
-        }
-      />
-    );
-  }
-
-  if (threads.length === 0) {
-    return (
-      <EmptyState
-        title="No conversations yet"
-        body="Once you and a landlord start messaging about a property, the conversation will appear here."
-        action={
-          <button
-            onClick={onOpenAssistant}
-            className="inline-block rounded-xl bg-(--amber) px-5 py-2.5 text-sm font-semibold text-(--ink) hover:bg-(--amber-soft) transition"
-          >
-            Chat with the assistant
-          </button>
-        }
-      />
-    );
-  }
-
-  return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,320px)_1fr]">
-      <div className="space-y-2">
-        {threads.map((thread) => (
-          <button
-            key={thread.id}
-            onClick={() => onSelectThread(thread.id)}
-            className={`w-full rounded-2xl border p-4 text-left transition ${
-              activeThreadId === thread.id
-                ? "border-[var(--amber)]/50 bg-[var(--amber)]/10"
-                : "border-white/10 bg-[var(--ink-soft)] hover:bg-white/5"
-            }`}
-          >
-            <span className="block truncate text-sm font-semibold text-white">
-              {threadTitle(thread)}
-            </span>
-            {thread.last_message && (
-              <span className="mt-1 block truncate text-xs text-slate-400">
-                {thread.last_message}
-              </span>
-            )}
-            {threadTimestamp(thread) && (
-              <span className="mt-1 block text-[10px] text-slate-500">
-                {formatDate(threadTimestamp(thread))}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-      <div className="flex min-h-[320px] flex-col rounded-2xl border border-white/10 bg-[var(--ink-soft)]">
-        {!activeThreadId ? (
-          <div className="flex flex-1 items-center justify-center p-8 text-sm text-slate-400">
-            Select a conversation to read and reply.
-          </div>
-        ) : (
-          <>
-            <div className="flex-1 space-y-3 overflow-y-auto p-5">
-              {error && <ErrorNotice message={error} />}
-              {loading ? (
-                <p className="text-sm text-slate-400">Loading conversation…</p>
-              ) : messages.length === 0 ? (
-                <p className="text-sm text-slate-400">
-                  No messages in this conversation yet.
-                </p>
-              ) : (
-                messages.map((msg) => {
-                  const mine =
-                    msg.sender_role === "renter" || msg.sender_id === userId;
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`flex ${mine ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
-                          mine
-                            ? "bg-[var(--amber)] text-[var(--ink)]"
-                            : "border border-white/10 bg-white/5 text-slate-200"
-                        }`}
-                      >
-                        <p className="whitespace-pre-wrap">{messageBody(msg)}</p>
-                        {msg.created_at && (
-                          <p className="mt-1 text-[10px] opacity-70">
-                            {formatDate(msg.created_at)}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-            <form
-              onSubmit={onSendReply}
-              className="flex items-center gap-2 border-t border-white/10 p-3"
-            >
-              <input
-                value={replyText}
-                onChange={(e) => onReplyChange(e.target.value)}
-                placeholder="Write a message…"
-                className="flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-[var(--amber)]/50"
-              />
-              <button
-                type="submit"
-                disabled={sendingReply || !replyText.trim()}
-                className="rounded-xl bg-[var(--amber)] px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--amber-soft)] disabled:opacity-50"
-              >
-                {sendingReply ? "Sending…" : "Send"}
-              </button>
-            </form>
-
-          </>
-        )}
-      </div>
-
-    </div>
-  );
-};
 
 export const RenterDashboard = () => {
   const [activeTab, setActiveTab] = useState<string>("overview");
@@ -481,6 +337,11 @@ export const RenterDashboard = () => {
     useState<FeatureStatus>("checking");
 
   const [messagingStatus, setMessagingStatus] =
+    useState<FeatureStatus>("checking");
+
+  const [kyc, setKyc] = useState<KycStatus | null>(null);
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [transactionsStatus, setTransactionsStatus] =
     useState<FeatureStatus>("checking");
 
   const [endpointChecks, setEndpointChecks] = useState<EndpointCheck[]>(
@@ -552,7 +413,6 @@ export const RenterDashboard = () => {
   // runs at most once per mount.
   const coreDataFetchedRef = useRef(false);
   const optionalFeaturesFetchedRef = useRef(false);
-  const debugChecksFetchedRef = useRef(false);
 
   // --- Core portal data: one aggregate call instead of three-plus-N
   // (previously: tours + applications + wallet, then a per-property fetch
@@ -612,21 +472,23 @@ export const RenterDashboard = () => {
     loadCoreData();
   }, []);
 
-  // --- Features with no backend endpoint yet: attempt, fail gracefully.
-  // Also feeds the debug table for these same three keys, so they're
-  // fetched exactly once — not once here and again for the debug view. ---
+  // --- Optional features (saved homes, notices, direct messages, KYC status,
+  // wallet history): one parallel pass, each section failing independently.
+  // The same results feed the dev-only endpoint table, so nothing is fetched
+  // twice. ---
   useEffect(() => {
     if (optionalFeaturesFetchedRef.current) return;
     optionalFeaturesFetchedRef.current = true;
 
     const loadOptionalFeatures = async () => {
-      const [savedRes, announcementsRes, threadsRes] = await Promise.allSettled(
-        [
+      const [savedRes, announcementsRes, threadsRes, kycRes, txRes] =
+        await Promise.allSettled([
           apiClient.get("/api/profile/saved-properties"),
           apiClient.get("/api/renter/announcements"),
           apiClient.get("/api/chat/threads"),
-        ],
-      );
+          apiClient.get("/api/kyc/status"),
+          apiClient.get("/payments/wallet/transactions"),
+        ]);
 
       if (
         savedRes.status === "fulfilled" &&
@@ -663,11 +525,33 @@ export const RenterDashboard = () => {
         setThreads(list);
       }
 
+      if (kycRes.status === "fulfilled" && kycRes.value.data) {
+        setKyc(kycRes.value.data as KycStatus);
+      } else {
+        setKyc(null);
+      }
+
+      if (txRes.status === "fulfilled") {
+        const body: unknown = txRes.value.data;
+        const list = Array.isArray(body)
+          ? asArray<WalletTransaction>(body)
+          : asArray<WalletTransaction>(
+              (body as { transactions?: unknown } | null)?.transactions ??
+                (body as { data?: unknown } | null)?.data,
+            );
+        setTransactions(list);
+        setTransactionsStatus("available");
+      } else {
+        setTransactionsStatus("unavailable");
+      }
+
       if (isDebugMode) {
         const byKey: Record<string, [FeatureStatus, string]> = {
           saved_get: statusAndDetail(savedRes),
           announcements_get: statusAndDetail(announcementsRes),
           threads_get: statusAndDetail(threadsRes),
+          kyc_status_get: statusAndDetail(kycRes),
+          wallet_history_get: statusAndDetail(txRes),
         };
 
         setEndpointChecks((prev) =>
@@ -681,41 +565,6 @@ export const RenterDashboard = () => {
     };
 
     loadOptionalFeatures();
-  }, []);
-
-  // --- Debug-only: live-check the two endpoints not already covered above
-  // (kyc status, wallet history). Keyed matching, not positional — each
-  // result is paired with its endpoint by `key`, so a future edit to
-  // PENDING_ENDPOINTS or DEBUG_ONLY_LIVE_KEYS can never desync an index
-  // into the wrong entry. ---
-  useEffect(() => {
-    if (!isDebugMode) return;
-    if (debugChecksFetchedRef.current) return;
-    debugChecksFetchedRef.current = true;
-
-    const runChecks = async () => {
-      const liveEndpoints = PENDING_ENDPOINTS.filter(
-        (ep) => ep.live && DEBUG_ONLY_LIVE_KEYS.has(ep.key),
-      );
-
-      const settled = await Promise.allSettled(
-        liveEndpoints.map((ep) => apiClient.get(ep.path)),
-      );
-      const resultByKey = new Map(
-        liveEndpoints.map((ep, idx) => [ep.key, settled[idx]]),
-      );
-
-      setEndpointChecks((prev) =>
-        prev.map((ep) => {
-          const result = resultByKey.get(ep.key);
-          if (!result) return ep;
-          const [status, detail] = statusAndDetail(result);
-          return { ...ep, status, detail };
-        }),
-      );
-    };
-
-    runChecks();
   }, []);
 
   const handleDownloadLease = async (leaseId: string) => {
@@ -850,6 +699,37 @@ export const RenterDashboard = () => {
             </div>
           ) : activeTab === "overview" ? (
             <div className="space-y-6">
+              {kyc && kyc.status !== "verified" && (
+                <div className="flex flex-col gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck size={18} className="mt-0.5 text-amber-400" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        Identity verification: {kycLabel(kyc.status)}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {kyc.status === "rejected"
+                          ? kyc.rejection_reason ||
+                            "Your last submission was rejected — please resubmit clearer documents."
+                          : kyc.status === "pending"
+                            ? "Your documents are with our verification team. We'll update you here."
+                            : "Verify your identity so you can apply for leases and pay rent without delays."}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() =>
+                      openAssistantWith(
+                        "I'd like to start my identity verification (KYC).",
+                      )
+                    }
+                    className="shrink-0 rounded-xl bg-(--amber) px-4 py-2 text-xs font-semibold text-(--ink) transition hover:bg-(--amber-soft)"
+                  >
+                    {kyc.status === "rejected" ? "Resubmit KYC" : "Start KYC"}
+                  </button>
+                </div>
+              )}
+
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
                 <MetricCard
                   label="Rented properties"
@@ -961,6 +841,80 @@ export const RenterDashboard = () => {
                   )}
                 </div>
               </div>
+            </div>
+          ) : activeTab === "wallet" ? (
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-white/10 bg-[var(--ink-soft)] p-6">
+                <p className="text-sm uppercase tracking-wide text-slate-500">
+                  Wallet balance
+                </p>
+                <p className="mt-2 font-mono-num text-3xl font-semibold text-white">
+                  {walletError
+                    ? "—"
+                    : formatPrice(wallet?.balance ?? 0, wallet?.currency)}
+                </p>
+                {walletError && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    We couldn&apos;t load your balance right now.
+                  </p>
+                )}
+              </div>
+
+              {transactionsStatus === "unavailable" ? (
+                <ErrorNotice message="We couldn't load your transaction history right now. Please try refreshing." />
+              ) : transactions.length === 0 ? (
+                <EmptyState
+                  title="No transactions yet"
+                  body="Rent and deposit payments you make through HousePadi will be listed here with their status."
+                />
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-white/10">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-white/5 text-xs uppercase tracking-wide text-slate-400">
+                      <tr>
+                        <th className="px-4 py-3">Date</th>
+                        <th className="px-4 py-3">Type</th>
+                        <th className="px-4 py-3">Reference</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {transactions.map((tx) => (
+                        <tr key={tx.id}>
+                          <td className="px-4 py-3 text-slate-300">
+                            {tx.created_at ? formatDate(tx.created_at) : "—"}
+                          </td>
+                          <td className="px-4 py-3 capitalize text-slate-300">
+                            {(tx.type || "payment").replace(/_/g, " ")}
+                          </td>
+                          <td className="px-4 py-3 font-mono-num text-xs text-slate-500">
+                            {tx.reference || tx.id.slice(0, 8)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`rounded-full border px-2 py-1 text-xs capitalize ${
+                                (tx.status || "").toLowerCase() === "success" ||
+                                (tx.status || "").toLowerCase() === "completed"
+                                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                                  : (tx.status || "").toLowerCase() ===
+                                      "failed"
+                                    ? "border-red-500/30 bg-red-500/10 text-red-400"
+                                    : "border-slate-500/30 bg-slate-500/10 text-slate-400"
+                              }`}
+                            >
+                              {tx.status || "pending"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono-num text-[var(--amber)]">
+                            {formatPrice(tx.amount, tx.currency)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           ) : activeTab === "rented" ? (
             <div className="space-y-6">
@@ -1295,7 +1249,7 @@ export const RenterDashboard = () => {
               />
             )
           ) : activeTab === "messages" ? (
-            <MessagesPanel
+            <MessageThreadsPanel
               threads={threads}
               activeThreadId={activeThreadId}
               messages={threadMessages}
@@ -1304,7 +1258,10 @@ export const RenterDashboard = () => {
               replyText={replyText}
               sendingReply={sendingReply}
               userId={user?.id}
+              myRole="renter"
               messagingAvailable={messagingStatus !== "unavailable"}
+              emptyTitle="No conversations yet"
+              emptyBody="Once you and a landlord start messaging about a property, the conversation will appear here."
               onSelectThread={openThread}
               onReplyChange={setReplyText}
               onSendReply={handleSendReply}

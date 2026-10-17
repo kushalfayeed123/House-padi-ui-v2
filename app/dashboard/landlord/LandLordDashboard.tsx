@@ -9,6 +9,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { CreatePropertyModal } from "@/app/component/modals/CreatePropertyModal";
 import { Header } from "@/app/component/ui/Header";
+import {
+  LandlordMessagesTab,
+} from "@/app/component/chat/LandlordMessagesTab";
+import { asArray, type ChatThread } from "@/app/component/chat/MessageThreadsPanel";
 import { 
   Home, 
   Calendar, 
@@ -106,6 +110,10 @@ export const LandlordDashboard = () => {
         return "/api/landlord/tours";
       case "applications":
         return "/api/landlord/applications";
+      case "chat":
+        // GET /api/chat/threads is role-agnostic — it returns the threads this
+        // user participates in as either renter or owner.
+        return "/api/chat/threads";
       default:
         return `/api/landlord/${tab}`;
     }
@@ -302,6 +310,15 @@ const EmptyState = ({ tab, isUnimplemented }: { tab: string; isUnimplemented: bo
     chat: "Active conversation threads with your tenants will appear here.",
   };
 
+  // Tabs whose backend endpoint doesn't exist yet: the copy should read like a
+  // roadmap item, not like a configuration error.
+  const comingSoonTitles: Record<string, string> = {
+    tenants: "Tenants & leases",
+    maintenance: "Maintenance",
+    announcements: "Announcements",
+    chat: "Tenant messages",
+  };
+
   return (
     <div className="text-center py-20 border-2 border-dashed border-[var(--amber)]/20 rounded-2xl bg-white/[0.02] p-8 space-y-4">
       <div className="inline-flex p-3 rounded-full bg-[var(--amber)]/10 text-[var(--amber)]">
@@ -309,11 +326,13 @@ const EmptyState = ({ tab, isUnimplemented }: { tab: string; isUnimplemented: bo
       </div>
       <div className="max-w-md mx-auto space-y-1">
         <h3 className="font-display text-lg font-semibold text-white">
-          {titles[tab] || "No Data Available"}
+          {isUnimplemented
+            ? comingSoonTitles[tab] || "Coming soon"
+            : titles[tab] || "No Data Available"}
         </h3>
         <p className="text-sm text-slate-400">
-          {isUnimplemented 
-            ? `The endpoint for this module is currently unavailable or not configured.` 
+          {isUnimplemented
+            ? "This section is coming soon — we're still building it. Everything else in your dashboard keeps working."
             : descriptions[tab] || "There is currently no data available in this section."}
         </p>
       </div>
@@ -684,6 +703,15 @@ const RenderContent = ({
         ))}
       </div>
     );
+  }
+
+  // 5. TENANT MESSAGES TAB
+  if (tab === "chat") {
+    const threads = Array.isArray(queryData)
+      ? queryData
+      : asArray<ChatThread>(queryData?.threads);
+
+    return <LandlordMessagesTab initialThreads={threads} />;
   }
 
   return <EmptyState tab={tab} isUnimplemented={false} />;

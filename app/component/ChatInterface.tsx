@@ -18,10 +18,17 @@ export const ChatInterface = ({ sessionId }: { sessionId: string }) => {
     setInput("");
 
     const { data } = await apiClient.post("/api/chat", {
-      text: msg,
-      session_id: sessionId,
+      message: msg,
+      thread_id: sessionId,
     });
-    setMessages((prev) => [...prev, { role: "agent", text: data.response, redirectUrl: data.redirect_url }]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "agent",
+        text: data.content || data.response || data.message || "I have updated your request.",
+        redirectUrl: data.redirect_url,
+      },
+    ]);
   };
 
   return (

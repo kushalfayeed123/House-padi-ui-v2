@@ -1270,9 +1270,10 @@ export const RenterDashboard = () => {
           ) : activeTab === "pending" && isDebugMode ? (
             <div className="space-y-4">
               <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-sm text-blue-200">
-                Debug view — visible only outside production. GET requests below
-                were tested live against the API on this page load; mutating
-                requests are listed but never fired automatically.
+                Debug view — visible only outside production. Every GET endpoint
+                below is called live on this page load (mutating requests are
+                listed but never fired automatically), and the status column
+                reports what actually responded.
               </div>
               <div className="overflow-hidden rounded-2xl border border-white/10">
                 <table className="w-full text-sm text-left">
@@ -1312,7 +1313,7 @@ export const RenterDashboard = () => {
                                 ? "Checking…"
                                 : ep.status === "not_tested"
                                   ? "Not tested (mutating)"
-                                  : "Not implemented"}
+                                  : "Unavailable"}
                           </span>
                           {ep.detail && (
                             <span className="ml-2 text-[10px] text-slate-500">

@@ -3,13 +3,28 @@ import React, { useState } from 'react';
 import { X, CheckCircle2, ShieldCheck, CreditCard, PenTool, FileText, Loader2, Download } from "lucide-react";
 import { Property } from "@/app/types/property";
 import { apiClient } from "@/app/lib/api-client";
+/**
+ * Shared shape for the apply → approve → pay → confirm flow. Both this modal
+ * and its callers (PropertyDetailView, RenterDashboard, ChatBox) use it, so
+ * the state handed back through `onStateChange` is always typed rather than
+ * `any`.
+ */
+export type LeaseUiState = {
+  step?: 1 | 2 | 3;
+  startDate?: string;
+  renterSignature?: string;
+  applicationId?: string;
+  lease_id?: string;
+  status?: string;
+};
+
 interface LeaseFlowModalProps {
   isOpen: boolean;
   onClose: () => void;
   propertyId: string;
   initialAmount?: number;
-  leaseUi?: any;
-  onStateChange: (updated: any) => void;
+  leaseUi?: Partial<LeaseUiState>;
+  onStateChange: (updated: Partial<LeaseUiState>) => void;
   userId: string;
 }
 

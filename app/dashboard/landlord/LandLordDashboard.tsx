@@ -453,13 +453,19 @@ const RenderContent = ({
               {properties.slice(0, 3).map((p: any) => (
                 <div key={p.id} className="bg-[var(--ink-soft)] rounded-2xl border border-white/10 overflow-hidden">
                   <div className="relative h-36 w-full bg-black/20">
-                    <Image
-                      src={p.images?.[0] || "/placeholder.jpg"}
-                      alt={p.title || "Property"}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                    />
+                    {p.images?.[0] ? (
+                      <Image
+                        src={p.images[0]}
+                        alt={p.title || "Property"}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-slate-600">
+                        <Building size={26} />
+                      </div>
+                    )}
                   </div>
                   <div className="p-4 space-y-1">
                     <h4 className="font-display font-medium text-white truncate">{p.title}</h4>
@@ -498,13 +504,19 @@ const RenderContent = ({
             className="group bg-[var(--ink-soft)] rounded-2xl border border-white/10 overflow-hidden hover:border-[var(--amber)]/40 transition-colors"
           >
             <div className="relative h-48 w-full bg-black/20">
-              <Image
-                src={p.images?.[0] || "/placeholder.jpg"}
-                alt={p.title || "Property"}
-                fill
-                className="object-cover transition-transform duration-500 group-hover:scale-105"
-                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              />
+              {p.images?.[0] ? (
+                <Image
+                  src={p.images[0]}
+                  alt={p.title || "Property"}
+                  fill
+                  className="object-cover transition-transform duration-500 group-hover:scale-105"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-slate-600">
+                  <Building size={28} />
+                </div>
+              )}
             </div>
             <div className="p-6">
               <h3 className="font-display font-medium text-lg text-white truncate">{p.title}</h3>

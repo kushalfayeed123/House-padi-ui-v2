@@ -302,6 +302,9 @@ export const RenterDashboard = () => {
   const [checkingAppId, setCheckingAppId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
+  const [savedActionId, setSavedActionId] = useState<string | null>(null);
+  const [savedError, setSavedError] = useState<string | null>(null);
+
   // Function to check status and launch modal if approved
   const handleCheckLandlordResponse = async (application: any) => {
     setCheckingAppId(application.id);
@@ -519,6 +522,21 @@ export const RenterDashboard = () => {
     }
   };
 
+  const handleRemoveSaved = async (propertyId: string) => {
+    setSavedActionId(propertyId);
+    setSavedError(null);
+    try {
+      await apiClient.delete(`/api/profile/saved-properties/${propertyId}`);
+      setSavedProperties((prev) => prev.filter((p) => p.id !== propertyId));
+    } catch {
+      setSavedError(
+        "We couldn't remove that saved home right now. Please try again.",
+      );
+    } finally {
+      setSavedActionId(null);
+    }
+  };
+
   return (
     <AuthGuard allowedRole="renter">
       <Header />
@@ -574,10 +592,14 @@ export const RenterDashboard = () => {
                 <MetricCard
                   label="Saved homes"
                   value={
-                    savedStatus === "available" ? savedProperties.length : "—"
+                    savedStatus === "unavailable"
+                      ? "—"
+                      : savedProperties.length
                   }
                   sublabel={
-                    savedStatus === "unavailable" ? "Coming soon" : undefined
+                    savedStatus === "unavailable"
+                      ? "Couldn't load right now"
+                      : undefined
                   }
                 />
                 <MetricCard
@@ -903,47 +925,63 @@ export const RenterDashboard = () => {
               
             </div>
           ) : activeTab === "saved" ? (
-            savedStatus === "available" && savedProperties.length > 0 ? (
-              <div className="grid gap-6 md:grid-cols-2">
-                {savedProperties.map((property) => (
-                  <div
-                    key={property.id}
-                    className="rounded-2xl border border-white/10 bg-[var(--ink-soft)] p-6 flex flex-col justify-between"
-                  >
-                    <div>
-                      <h3 className="font-display text-lg font-semibold text-white">
-                        {property.title}
-                      </h3>
-                      <p className="mt-2 text-sm text-slate-400">
-                        {property.address}
-                      </p>
+            savedStatus === "unavailable" ? (
+              <ErrorNotice message="We couldn't load your saved homes right now. Please try refreshing." />
+            ) : savedProperties.length > 0 ? (
+              <div className="space-y-4">
+                {savedError && <ErrorNotice message={savedError} />}
+                <div className="grid gap-6 md:grid-cols-2">
+                  {savedProperties.map((property) => (
+                    <div
+                      key={property.id}
+                      className="rounded-2xl border border-white/10 bg-[var(--ink-soft)] p-6 flex flex-col justify-between"
+                    >
+                      <div>
+                        <h3 className="font-display text-lg font-semibold text-white">
+                          {property.title}
+                        </h3>
+                        <p className="mt-2 text-sm text-slate-400">
+                          {property.address}
+                        </p>
+                      </div>
+                      <div className="mt-6 flex items-center justify-between gap-3 border-t border-white/10 pt-4">
+                        <span className="font-mono-num text-lg font-semibold text-[var(--amber)]">
+                          {formatPrice(property.price, property.currency)}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <Link
+                            href={`/properties/${property.id}`}
+                            className="text-sm font-semibold text-[var(--amber)] hover:text-[var(--amber-soft)]"
+                          >
+                            View property &rarr;
+                          </Link>
+                          <button
+                            onClick={() => handleRemoveSaved(property.id)}
+                            disabled={savedActionId === property.id}
+                            className="text-sm font-semibold text-slate-400 hover:text-red-400 transition disabled:opacity-50"
+                          >
+                            {savedActionId === property.id
+                              ? "Removing…"
+                              : "Remove"}
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
-                      <span className="font-mono-num text-lg font-semibold text-[var(--amber)]">
-                        {formatPrice(property.price, property.currency)}
-                      </span>
-                      <Link
-                        href={`/properties/${property.id}`}
-                        className="text-sm font-semibold text-[var(--amber)] hover:text-[var(--amber-soft)]"
-                      >
-                        View property &rarr;
-                      </Link>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             ) : (
               <EmptyState
-                title="Saving homes is coming soon"
-                body="You'll soon be able to bookmark listings you like and find them all here. For now, browse listings and the assistant can help you keep track of favorites."
-                // action={
-                //   <Link
-                //     href="/properties"
-                //     className="inline-block rounded-xl bg-[var(--amber)] px-5 py-2.5 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--amber-soft)] transition"
-                //   >
-                //     Browse properties
-                //   </Link>
-                // }
+                title="No saved homes yet"
+                body="Tap “Save home” on any listing and it will be waiting for you here."
+                action={
+                  <button
+                    onClick={openAssistant}
+                    className="inline-block rounded-xl bg-(--amber) px-5 py-2.5 text-sm font-semibold text-(--ink) hover:bg-(--amber-soft) transition"
+                  >
+                    Find homes with the assistant
+                  </button>
+                }
               />
             )
           ) : activeTab === "announcements" ? (

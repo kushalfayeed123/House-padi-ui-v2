@@ -1,13 +1,21 @@
 "use client";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Property } from "../types/property";
 import { EditPropertyModal } from "./modals/EditPropertyModal";
-import { LeaseFlowModal } from "./modals/LeaseFlowModal";
-import { ChevronLeft, ChevronRight, MapPin, ArrowLeft, Building, LayoutGrid, CalendarDays, FileCheck, Bot, Loader2 } from "lucide-react";
+import { LeaseFlowModal, type LeaseUiState } from "./modals/LeaseFlowModal";
+import { ChevronLeft, ChevronRight, MapPin, ArrowLeft, Building, LayoutGrid, CalendarDays, FileCheck, Bot, Loader2, Bookmark, BookmarkCheck } from "lucide-react";
 import { apiClient } from "../lib/api-client";
 import { useAuth } from "../context/AuthContext";
+
+type SaveState = "idle" | "saving" | "saved" | "error";
+
+const apiErrorDetail = (err: unknown, fallback: string): string => {
+  const detail = (err as { response?: { data?: { detail?: string } } })?.response
+    ?.data?.detail;
+  return typeof detail === "string" && detail.trim() ? detail : fallback;
+};
 
 interface PropertyDetailsViewProps {
   property: Property;
@@ -32,10 +40,94 @@ export const PropertyDetailsView = ({
   const [isLoadingDoc, setIsLoadingDoc] = useState(false);
   const [docErrorMsg, setDocErrorMsg] = useState<string | null>(null);
 
+  // State handed back by LeaseFlowModal as the renter moves through
+  // apply → approve → pay → confirm. The direct-lease CTA previously threw
+  // "Function not implemented." here, which broke the flow the moment the
+  // modal reported any state change.
+  const [leaseState, setLeaseState] = useState<Partial<LeaseUiState>>({});
+
+  // Saved-home (bookmark) state
+  const [isSaved, setIsSaved] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const { user } = useAuth();
 
-  const nextImage = () => setCurrentIdx((prev) => (prev + 1) % property.images.length);
-  const prevImage = () => setCurrentIdx((prev) => (prev - 1 + property.images.length) % property.images.length);
+  const images = property.images ?? [];
+
+  const nextImage = () => setCurrentIdx((prev) => (prev + 1) % images.length);
+  const prevImage = () => setCurrentIdx((prev) => (prev - 1 + images.length) % images.length);
+
+  // Are we already bookmarked? Only ask the API when there's a signed-in user.
+  useEffect(() => {
+    if (!user?.id) {
+      setIsSaved(false);
+      return;
+    }
+
+    let cancelled = false;
+    apiClient
+      .get("/api/profile/saved-properties")
+      .then((res) => {
+        if (cancelled) return;
+        const saved = Array.isArray(res.data) ? res.data : [];
+        setIsSaved(
+          saved.some(
+            (item: { id?: string; property_id?: string }) =>
+              (item?.id ?? item?.property_id) === property.id,
+          ),
+        );
+      })
+      .catch(() => {
+        // Saving is a nice-to-have — a failed lookup just means we render the
+        // unsaved state rather than blocking the page.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [property.id, user?.id]);
+
+  const handleToggleSave = useCallback(async () => {
+    if (!user?.id) {
+      window.dispatchEvent(new Event("open-auth-modal"));
+      return;
+    }
+
+    const nextSaved = !isSaved;
+    setSaveState("saving");
+    setSaveError(null);
+
+    try {
+      if (nextSaved) {
+        await apiClient.post(`/api/profile/saved-properties/${property.id}`);
+      } else {
+        await apiClient.delete(`/api/profile/saved-properties/${property.id}`);
+      }
+      setIsSaved(nextSaved);
+      setSaveState("saved");
+    } catch (err: unknown) {
+      setSaveError(
+        apiErrorDetail(err, "We couldn't update your saved homes right now."),
+      );
+      setSaveState("error");
+    }
+  }, [isSaved, property.id, user?.id]);
+
+  const handleLeaseStateChange = useCallback(
+    (updated: Partial<LeaseUiState>) => {
+      setLeaseState((prev) => {
+        const next = { ...prev, ...updated };
+        // Once the lease is active, the status chip and renter panel on this
+        // page are stale — pull fresh server data.
+        if (next.status === "completed" || next.status === "active") {
+          router.refresh();
+        }
+        return next;
+      });
+    },
+    [router],
+  );
 
   const handleTourSubmit = async () => {
     if (!tourSelection.date || !tourSelection.time) return;
@@ -59,7 +151,9 @@ export const PropertyDetailsView = ({
   };
 
   const handleFetchDocument = async () => {
-    const leaseId = property.id;
+    // Prefer the lease created by the flow on this page; fall back to the
+    // property id for listings that already carry an active lease.
+    const leaseId = leaseState.lease_id || property.id;
     if (!leaseId) return;
 
     setIsLoadingDoc(true);
@@ -69,9 +163,18 @@ export const PropertyDetailsView = ({
       const response = await apiClient.get(`/api/leases/${leaseId}/document`);
       if (response.data?.signed_url) {
         window.open(response.data.signed_url, "_blank");
+      } else {
+        setDocErrorMsg(
+          "The lease document isn't ready yet — please try again shortly.",
+        );
       }
-    } catch (err: any) {
-      setDocErrorMsg(err.response?.data?.detail || "Document not yet available. Waiting for final processing.");
+    } catch (err: unknown) {
+      setDocErrorMsg(
+        apiErrorDetail(
+          err,
+          "Document not yet available. Waiting for final processing.",
+        ),
+      );
     } finally {
       setIsLoadingDoc(false);
     }
@@ -118,42 +221,76 @@ export const PropertyDetailsView = ({
           </div>
 
           <div className="flex items-center gap-3">
-            {isLandlord && (
+            {isLandlord ? (
               <button
                 onClick={() => setIsEditOpen(true)}
                 className="px-4 py-2 bg-(--ink-soft) hover:bg-white/5 text-slate-200 border border-white/10 rounded-xl text-xs font-semibold transition"
               >
                 Edit Listing
               </button>
+            ) : (
+              <button
+                onClick={handleToggleSave}
+                disabled={saveState === "saving"}
+                aria-pressed={isSaved}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition border flex items-center gap-2 disabled:opacity-60 ${
+                  isSaved
+                    ? "bg-(--amber)/10 border-(--amber)/40 text-(--amber)"
+                    : "bg-(--ink-soft) hover:bg-white/5 text-slate-200 border-white/10"
+                }`}
+              >
+                {saveState === "saving" ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : isSaved ? (
+                  <BookmarkCheck size={14} />
+                ) : (
+                  <Bookmark size={14} />
+                )}
+                {isSaved ? "Saved" : "Save home"}
+              </button>
             )}
-            <button className="px-4 py-2 bg-(--amber) hover:bg-(--amber-soft) text-(--ink) rounded-xl text-xs font-semibold transition shadow-lg shadow-black/30">
-              View Analytics
-            </button>
           </div>
         </div>
+
+        {saveError && (
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-xs text-red-300">
+            {saveError}
+          </div>
+        )}
 
         {/* 2. Core Operational Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
           <div className="lg:col-span-8 space-y-6">
             <div className="relative aspect-video w-full rounded-2xl overflow-hidden border border-white/10 bg-[var(--ink-soft)] group shadow-2xl">
-              <Image
-                src={property.images[currentIdx]}
-                alt={property.title}
-                fill
-                priority
-                sizes="(max-width: 1024px) 100vw, 850px"
-                className="object-cover"
-              />
-              <button onClick={prevImage} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-(--ink)/60 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-(--ink-soft) transition">
-                <ChevronLeft size={16} />
-              </button>
-              <button onClick={nextImage} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-(--ink)/60 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-(--ink-soft) transition">
-                <ChevronRight size={16} />
-              </button>
-              <div className="absolute bottom-4 right-4 bg-[var(--ink)]/80 backdrop-blur-md border border-white/10 px-3 py-1 rounded-lg text-[10px] font-mono-num tracking-wider text-slate-400">
-                {currentIdx + 1} / {property.images.length}
-              </div>
+              {property.images?.length ? (
+                <Image
+                  src={images[currentIdx]}
+                  alt={property.title}
+                  fill
+                  priority
+                  sizes="(max-width: 1024px) 100vw, 850px"
+                  className="object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-slate-500">
+                  <Building size={36} />
+                  <span className="text-xs">No photos provided for this listing</span>
+                </div>
+              )}
+              {images.length > 1 && (
+                <>
+                  <button onClick={prevImage} aria-label="Previous photo" className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-(--ink)/60 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-(--ink-soft) transition">
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button onClick={nextImage} aria-label="Next photo" className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-(--ink)/60 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-(--ink-soft) transition">
+                    <ChevronRight size={16} />
+                  </button>
+                  <div className="absolute bottom-4 right-4 bg-[var(--ink)]/80 backdrop-blur-md border border-white/10 px-3 py-1 rounded-lg text-[10px] font-mono-num tracking-wider text-slate-400">
+                    {currentIdx + 1} / {images.length}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="bg-[var(--ink-soft)]/40 border border-white/10 rounded-2xl p-6 space-y-4">
@@ -315,10 +452,9 @@ export const PropertyDetailsView = ({
         isOpen={isLeaseModalOpen}
         onClose={() => setIsLeaseModalOpen(false)}
         propertyId={property.id}
-        onStateChange={function (updated: any): void {
-          throw new Error("Function not implemented.");
-        } }
-        userId={user?.id || ''}        
+        leaseUi={leaseState}
+        onStateChange={handleLeaseStateChange}
+        userId={user?.id || ''}
       />
     </div>
   );

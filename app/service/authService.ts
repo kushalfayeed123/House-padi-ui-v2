@@ -16,7 +16,15 @@ export const authService = {
   },
 
   register: async (userData: RegisterData): Promise<AuthResponse> => {
-    const { data } = await apiClient.post<AuthResponse>("/api/auth/register", userData);
+    // The backend's register schema keys landlords as "landlord" (profiles/RBAC
+    // use "owner"); the app models the role as "owner". Translate at the wire
+    // boundary so both spellings stay valid.
+    const payload = {
+      ...userData,
+      role: userData.role === "owner" ? "landlord" : userData.role,
+    };
+
+    const { data } = await apiClient.post<AuthResponse>("/api/auth/register", payload);
     
     if (data.access_token) {
       localStorage.setItem("access_token", data.access_token);

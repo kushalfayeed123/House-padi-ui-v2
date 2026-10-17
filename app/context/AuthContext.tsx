@@ -13,6 +13,23 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// The backend's RBAC uses "owner" for landlords (see tour_ops.py), while
+// Supabase metadata has historically carried "landlord". Normalise once here so
+// every role check in the UI (Header, AuthGuard, DashboardLoader) is consistent.
+export const normalizeRole = (role?: string | null): UserProfile["role"] =>
+  role === "landlord" || role === "owner" ? "owner" : "renter";
+
+// The server-side middleware can't read localStorage, so mirror the role into a
+// cookie it can read. Cleared on sign-out and whenever the token is invalid.
+export const persistRoleCookie = (role?: string | null) => {
+  if (typeof document === "undefined") return;
+  if (role) {
+    document.cookie = `user_role=${role}; path=/; max-age=${60 * 60 * 24 * 7}; samesite=lax`;
+  } else {
+    document.cookie = "user_role=; path=/; max-age=0; samesite=lax";
+  }
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,6 +38,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchProfile = useCallback(async () => {
     const token = localStorage.getItem("access_token");
     if (!token) {
+      persistRoleCookie(null);
       setUser(null);
       setIsLoading(false);
       return;
@@ -29,7 +47,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const { data } = await apiClient.get("/api/profile");
       if (data && data.profile) {
-        const profile = data.profile;
+        const profile = {
+          ...data.profile,
+          role: normalizeRole(data.profile.role),
+        } as UserProfile;
 
         // Check if a different user is logging in on this browser
         const previousChatUserId = localStorage.getItem("housepadi_chat_user_id");
@@ -43,9 +64,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         // Bind current chat session to this user ID
         localStorage.setItem("housepadi_chat_user_id", profile.id);
+        persistRoleCookie(profile.role);
 
         setUser(profile); // Maps directly to your public.profiles columns
       } else {
+        persistRoleCookie(null);
         setUser(null);
       }
     } catch (error) {
@@ -53,6 +76,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Clear invalid or expired tokens
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
+      persistRoleCookie(null);
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -66,6 +90,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signOut = async () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
+    localStorage.removeItem("housepadi_chat_user_id");
+    persistRoleCookie(null);
     setUser(null);
     window.location.href = "/";
   };

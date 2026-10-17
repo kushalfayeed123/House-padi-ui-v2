@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth, normalizeRole, persistRoleCookie } from "../context/AuthContext";
 import { authService } from "../service/authService";
 
 export const AuthModal = ({ onClose }: { onClose: () => void }) => {
@@ -17,15 +17,18 @@ export const AuthModal = ({ onClose }: { onClose: () => void }) => {
         ? await authService.login({ email: formData.email, password: formData.password })
         : await authService.register({ ...formData, role: "renter" });
 
+      const role = normalizeRole(response.user.user_metadata?.role);
+
       setUser({
         id: response.user.id,
         email: response.user.email,
         first_name: response.user.user_metadata?.first_name || formData.first_name,
         last_name: response.user.user_metadata?.last_name || formData.last_name,
-        role: response.user.user_metadata?.role || "renter",
+        role,
         avatar_url: "",
         created_at: ""
       });
+      persistRoleCookie(role);
       onClose();
     } catch (err) {
       console.error("Auth failed", err);

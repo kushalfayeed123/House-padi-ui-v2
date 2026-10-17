@@ -224,7 +224,7 @@ const formatPrice = (amount?: number, currency?: string): string => {
   try {
     return new Intl.NumberFormat("en-NG", {
       style: "currency",
-      currency: "NGN",
+      currency: currency || "NGN",
       maximumFractionDigits: 0,
     }).format(amount);
   } catch {
@@ -1185,7 +1185,11 @@ export const RenterDashboard = () => {
                     renterSignature: selectedApplication.renter_signature,
                   }}
                   onStateChange={(updated) => {
-                    // Sync state updates back to your application list if needed
+                    // Keep the parent's copy of the application in sync with
+                    // the steps the modal reports (apply → approve → pay).
+                    setSelectedApplication((prev: any) =>
+                      prev ? { ...prev, ...updated } : prev,
+                    );
                   }}
                   userId={user?.id || ""}
                 />

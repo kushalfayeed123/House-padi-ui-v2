@@ -84,6 +84,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   useEffect(() => {
+    // Auth bootstrap: the token lives in localStorage, so the profile lookup
+    // can only happen in the browser after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchProfile();
   }, [fetchProfile]);
 

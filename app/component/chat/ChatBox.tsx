@@ -4,7 +4,6 @@ import {
   useRef,
   useEffect,
   type ReactNode,
-  SetStateAction,
 } from "react";
 import {
   Send,
@@ -34,6 +33,12 @@ const STORAGE_KEY_MESSAGES = "housepadi_chat_messages";
 const STORAGE_KEY_THREAD = "housepadi_thread_id";
 const STORAGE_KEY_OPEN = "housepadi_chat_open";
 const STORAGE_KEY_MINIMIZED = "housepadi_chat_minimized";
+
+const apiErrorDetail = (err: unknown, fallback: string): string => {
+  const detail = (err as { response?: { data?: { detail?: string } } })?.response
+    ?.data?.detail;
+  return typeof detail === "string" && detail.trim() ? detail : fallback;
+};
 
 type SearchProperty = {
   id?: string;
@@ -176,7 +181,6 @@ const extractUiSignal = (
       };
     }
 
-    console.log(uiComponent, LEASE_UI_COMPONENTS.has(uiComponent));
     if (LEASE_UI_COMPONENTS.has(uiComponent)) {
       return {
         leaseUi: {
@@ -334,13 +338,16 @@ const InlineLeaseWidget = ({
   // source of truth before anything renders it.
   const [amount, setAmount] = useState<number>(initialAmount);
   const [displayCurrency, setDisplayCurrency] = useState<string>(currency);
-  const [amountLoading, setAmountLoading] = useState(true);
-  const [amountError, setAmountError] = useState<string | null>(null);
+  const [resolvedPropertyId, setResolvedPropertyId] = useState<string | null>(
+    null,
+  );
+  const [amountError, setAmountError] = useState<{
+    propertyId: string;
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setAmountLoading(true);
-    setAmountError(null);
 
     fetchPropertyDetailsCached(propertyId)
       .then((details) => {
@@ -348,16 +355,20 @@ const InlineLeaseWidget = ({
         if (typeof details?.price === "number") setAmount(details.price);
         if (details?.currency) setDisplayCurrency(details.currency);
         if (typeof details?.price !== "number") {
-          setAmountError("Couldn't confirm the exact rent for this property.");
+          setAmountError({
+            propertyId,
+            message: "Couldn't confirm the exact rent for this property.",
+          });
         }
+        setResolvedPropertyId(propertyId);
       })
       .catch(() => {
-        if (!cancelled) {
-          setAmountError("Couldn't confirm the exact rent for this property.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setAmountLoading(false);
+        if (cancelled) return;
+        setAmountError({
+          propertyId,
+          message: "Couldn't confirm the exact rent for this property.",
+        });
+        setResolvedPropertyId(propertyId);
       });
 
     return () => {
@@ -366,10 +377,15 @@ const InlineLeaseWidget = ({
   }, [propertyId]);
 
   const totalPayment = amount;
+  // Loading/error are derived from which property we've resolved rather than
+  // stored directly, so the effect above never has to set state synchronously.
+  const amountLoading = resolvedPropertyId !== propertyId;
+  const amountErrorMessage =
+    amountError?.propertyId === propertyId ? amountError.message : null;
   // Never let someone submit/sign against an unconfirmed or failed price
   // fetch — showing "Loading…" or an explicit error is safer than
   // silently proceeding on a guessed number.
-  const amountConfirmed = !amountLoading && !amountError;
+  const amountConfirmed = !amountLoading && !amountErrorMessage;
 
   const handleApplyAndSign = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -401,10 +417,8 @@ const InlineLeaseWidget = ({
         lease_id: returnedLeaseId,
         status: "pending_approval",
       });
-    } catch (err: any) {
-      setErrorMsg(
-        err.response?.data?.detail || "Failed to submit application.",
-      );
+    } catch (err: unknown) {
+      setErrorMsg(apiErrorDetail(err, "Failed to submit application."));
     } finally {
       setLoading(false);
     }
@@ -442,10 +456,8 @@ const InlineLeaseWidget = ({
           "Application is still pending landlord review. Please check back shortly.",
         );
       }
-    } catch (err: any) {
-      setErrorMsg(
-        err.response?.data?.detail || "Failed to fetch application status.",
-      );
+    } catch (err: unknown) {
+      setErrorMsg(apiErrorDetail(err, "Failed to fetch application status."));
     } finally {
       setLoading(false);
     }
@@ -463,10 +475,8 @@ const InlineLeaseWidget = ({
       });
 
       setPaymentInitialized(true);
-    } catch (err: any) {
-      setErrorMsg(
-        err.response?.data?.detail || "Payment initialization failed.",
-      );
+    } catch (err: unknown) {
+      setErrorMsg(apiErrorDetail(err, "Payment initialization failed."));
     } finally {
       setLoading(false);
     }
@@ -497,8 +507,8 @@ const InlineLeaseWidget = ({
         step: 3,
         status: "completed",
       });
-    } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || "Webhook simulation failed.");
+    } catch (err: unknown) {
+      setErrorMsg(apiErrorDetail(err, "Webhook simulation failed."));
     } finally {
       setLoading(false);
     }
@@ -512,10 +522,9 @@ const InlineLeaseWidget = ({
       if (response.data?.signed_url) {
         window.open(response.data.signed_url, "_blank");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setErrorMsg(
-        err.response?.data?.detail ||
-          "Document not yet available. Waiting for final processing.",
+        apiErrorDetail(err, "Document not yet available. Waiting for final processing."),
       );
     } finally {
       setLoading(false);
@@ -559,10 +568,10 @@ const InlineLeaseWidget = ({
         </div>
       )}
 
-      {amountError && (
+      {amountErrorMessage && (
         <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300">
-          {amountError} Please refresh before continuing — we won't let you sign
-          or pay against an unconfirmed amount.
+          {amountErrorMessage} Please refresh before continuing — we
+          won&apos;t let you sign or pay against an unconfirmed amount.
         </div>
       )}
 
@@ -769,7 +778,6 @@ export const ChatBox = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState<boolean>(false);
-  const [hasUnread, setHasUnread] = useState<boolean>(false);
   const [isConfirming, setIsConfirming] = useState(false);
 
   // Smart Scroll states
@@ -888,6 +896,9 @@ export const ChatBox = ({
   };
 
   useEffect(() => {
+    // Hydration guard: localStorage is only readable in the browser, so the
+    // chat's restored state has to be applied after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMounted(true);
     if (typeof window !== "undefined") {
       const savedOpen = localStorage.getItem(STORAGE_KEY_OPEN);
@@ -952,7 +963,10 @@ export const ChatBox = ({
     setIsAtBottom(true);
   };
 
-  // Smart auto-scroll effect: only scroll down on new messages if user was already at bottom or sent it
+  // Smart auto-scroll effect: only scroll down on new messages if user was already at bottom or sent it.
+  // Reacting to an arriving message (scrolling, unread badge) is inherently a
+  // post-commit side effect, so the setState calls here are intentional.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const last = messages[messages.length - 1];
     if (!last) return;
@@ -962,22 +976,22 @@ export const ChatBox = ({
     } else if (isAtBottom) {
       scrollToBottom("smooth");
     } else {
-      // User is scrolled up and received an assistant reply
+      // User is scrolled up and received an assistant reply — surface the
+      // "new message" affordance.
       setShowScrollBottom(true);
       setUnreadCount((prev) => prev + 1);
     }
   }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* eslint-enable react-hooks/set-state-in-effect */
 
-  useEffect(() => {
-    const last = messages[messages.length - 1];
-    if (last?.role === "assistant" && (!isOpen || isMinimized)) {
-      setHasUnread(true);
-    }
-  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Unread badge is derived rather than stored: it's simply "the last message
+  // is from the assistant and the panel isn't open in front of the user".
+  const lastMessage = messages[messages.length - 1];
+  const hasUnread =
+    lastMessage?.role === "assistant" && (!isOpen || isMinimized);
 
   useEffect(() => {
     if (isOpen && !isMinimized) {
-      setHasUnread(false);
       setTimeout(() => scrollToBottom("auto"), 50);
     }
   }, [isOpen, isMinimized]);

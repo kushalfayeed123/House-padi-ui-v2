@@ -1,8 +1,13 @@
 "use client";
 import React, { useState } from 'react';
 import { X, CheckCircle2, ShieldCheck, CreditCard, PenTool, FileText, Loader2, Download } from "lucide-react";
-import { Property } from "@/app/types/property";
 import { apiClient } from "@/app/lib/api-client";
+
+const apiErrorDetail = (err: unknown, fallback: string): string => {
+  const detail = (err as { response?: { data?: { detail?: string } } })?.response
+    ?.data?.detail;
+  return typeof detail === "string" && detail.trim() ? detail : fallback;
+};
 /**
  * Shared shape for the apply → approve → pay → confirm flow. Both this modal
  * and its callers (PropertyDetailView, RenterDashboard, ChatBox) use it, so
@@ -37,8 +42,6 @@ export const LeaseFlowModal = ({
   onStateChange,
   userId,
 }: LeaseFlowModalProps) => {
-  if (!isOpen) return null;
-
   const [step, setStep] = useState<1 | 2 | 3>(leaseUi?.step || 1);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -85,8 +88,8 @@ export const LeaseFlowModal = ({
         lease_id: returnedLeaseId,
         status: "pending_approval",
       });
-    } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || "Failed to submit application.");
+    } catch (err: unknown) {
+      setErrorMsg(apiErrorDetail(err, "Failed to submit application."));
     } finally {
       setLoading(false);
     }
@@ -121,8 +124,8 @@ export const LeaseFlowModal = ({
       } else {
         setErrorMsg("Application is still pending landlord review. Please check back shortly.");
       }
-    } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || "Failed to fetch application status.");
+    } catch (err: unknown) {
+      setErrorMsg(apiErrorDetail(err, "Failed to fetch application status."));
     } finally {
       setLoading(false);
     }
@@ -141,8 +144,8 @@ export const LeaseFlowModal = ({
       });
 
       setPaymentInitialized(true);
-    } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || "Payment initialization failed.");
+    } catch (err: unknown) {
+      setErrorMsg(apiErrorDetail(err, "Payment initialization failed."));
     } finally {
       setLoading(false);
     }
@@ -174,8 +177,8 @@ export const LeaseFlowModal = ({
         step: 3,
         status: "completed",
       });
-    } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || "Webhook simulation failed.");
+    } catch (err: unknown) {
+      setErrorMsg(apiErrorDetail(err, "Webhook simulation failed."));
     } finally {
       setLoading(false);
     }
@@ -190,12 +193,17 @@ export const LeaseFlowModal = ({
       if (response.data?.signed_url) {
         window.open(response.data.signed_url, "_blank");
       }
-    } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || "Document not yet available. Waiting for final processing.");
+    } catch (err: unknown) {
+      setErrorMsg(apiErrorDetail(err, "Document not yet available. Waiting for final processing."));
     } finally {
       setLoading(false);
     }
   };
+
+  // Bail out only after every hook has run — returning before the useState
+  // calls above would change the hook count between renders and crash the
+  // moment the modal opens.
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">

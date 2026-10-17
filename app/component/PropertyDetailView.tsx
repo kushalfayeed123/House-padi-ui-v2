@@ -46,12 +46,16 @@ export const PropertyDetailsView = ({
   // modal reported any state change.
   const [leaseState, setLeaseState] = useState<Partial<LeaseUiState>>({});
 
-  // Saved-home (bookmark) state
-  const [isSaved, setIsSaved] = useState(false);
+  // Saved-home (bookmark) state. We keep the raw list of saved ids (rather
+  // than a boolean) so the effect below never has to set state synchronously,
+  // and `isSaved` is simply derived from it.
+  const [savedIds, setSavedIds] = useState<string[] | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const { user } = useAuth();
+
+  const isSaved = user?.id ? (savedIds?.includes(property.id) ?? false) : false;
 
   const images = property.images ?? [];
 
@@ -60,10 +64,7 @@ export const PropertyDetailsView = ({
 
   // Are we already bookmarked? Only ask the API when there's a signed-in user.
   useEffect(() => {
-    if (!user?.id) {
-      setIsSaved(false);
-      return;
-    }
+    if (!user?.id) return;
 
     let cancelled = false;
     apiClient
@@ -71,10 +72,10 @@ export const PropertyDetailsView = ({
       .then((res) => {
         if (cancelled) return;
         const saved = Array.isArray(res.data) ? res.data : [];
-        setIsSaved(
-          saved.some(
+        setSavedIds(
+          saved.map(
             (item: { id?: string; property_id?: string }) =>
-              (item?.id ?? item?.property_id) === property.id,
+              item?.id ?? item?.property_id ?? "",
           ),
         );
       })
@@ -104,7 +105,12 @@ export const PropertyDetailsView = ({
       } else {
         await apiClient.delete(`/api/profile/saved-properties/${property.id}`);
       }
-      setIsSaved(nextSaved);
+      setSavedIds((prev) => {
+        const base = prev ?? [];
+        return nextSaved
+          ? [...base, property.id]
+          : base.filter((id) => id !== property.id);
+      });
       setSaveState("saved");
     } catch (err: unknown) {
       setSaveError(

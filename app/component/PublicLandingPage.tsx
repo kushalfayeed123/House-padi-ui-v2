@@ -15,13 +15,13 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { apiClient } from "../lib/api-client";
-import { GlobalChat } from "./chat/GlobalChat";
 import { PropertyCard } from "./ui/PropertyCard";
+import type { Property } from "../types/property";
 
 const STORAGE_KEY_RESULTS = "housepadi_ai_results";
 
 export function PublicLanding() {
-  const [properties, setProperties] = useState([]);
+  const [properties, setProperties] = useState<Property[]>([]);
 
   const openAgent = useCallback((message?: string) => {
     window.dispatchEvent(
@@ -33,7 +33,7 @@ export function PublicLanding() {
     );
   }, []);
 
-  const [aiResults, setAiResults] = useState<any[] | null>(() => {
+  const [aiResults, setAiResults] = useState<Property[] | null>(() => {
     if (typeof window === "undefined") return null;
     try {
       const saved = localStorage.getItem(STORAGE_KEY_RESULTS);
@@ -73,7 +73,7 @@ export function PublicLanding() {
     const handleResultsEvent = (event: Event) => {
       const detail = (event as CustomEvent).detail;
       if (Array.isArray(detail)) {
-        setAiResults(detail as any[]);
+        setAiResults(detail as Property[]);
       }
     };
 
@@ -189,7 +189,7 @@ export function PublicLanding() {
             [Search, "Semantic AI Matching", "Describe your dream home in natural conversational language and get accurate property results instantly."],
             [Wallet, "Secure Escrow Payments", "Rent and security deposits are held securely in bank-grade escrow until keys are handed over."],
             [Building2, "End-to-End Landlord Tools", "List properties, review credit-checked applications, and receive rent payouts seamlessly."],
-          ].map(([Icon, title, copy], i) => {
+          ].map(([Icon, title, copy]) => {
             const IconComp = Icon as React.ComponentType<{ size?: number; className?: string }>;
             return (
               <div
@@ -335,7 +335,7 @@ export function PublicLanding() {
           </div>
         ) : properties.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {properties.map((p: any, i) => <ResultTicket key={p.id} property={p} index={i} />)}
+            {properties.map((p, i) => <ResultTicket key={p.id} property={p} index={i} />)}
           </div>
         ) : (
           <div className="text-center py-16 border border-dashed border-white/10 rounded-3xl bg-[var(--ink-soft)]/50 backdrop-blur-sm">
@@ -490,7 +490,7 @@ export function PublicLanding() {
   );
 }
 
-const ResultTicket = ({ property, index }: { property: any; index: number }) => (
+const ResultTicket = ({ property, index }: { property: Property; index: number }) => (
   <div className="ticket-stub relative bg-[var(--ink-soft)]/90 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden hover:border-[var(--amber)]/50 transition-all shadow-xl">
     <div className="absolute top-4 right-4 z-10 -rotate-6 border-2 border-dashed border-[var(--amber)] text-[var(--amber)] text-[10px] font-mono-num font-semibold tracking-widest px-2.5 py-1 rounded-full bg-[var(--ink-soft)]/95 shadow-md">
       VERIFIED

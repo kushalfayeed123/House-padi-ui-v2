@@ -17,13 +17,22 @@ export interface RegisterData {
 
 
 
+export interface AuthUserMetadata {
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  phone?: string;
+  role?: string;
+  [key: string]: unknown;
+}
+
 export interface AuthResponse {
   access_token: string;
   refresh_token: string;
   return_url?: string | null;
   redirect_url?: string | null;
   user: {
-    user_metadata: any;
+    user_metadata: AuthUserMetadata;
     id: string;
     email: string;
     profile: UserProfile;

@@ -33,14 +33,17 @@ function LoginFormContent() {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // Read the one-shot "why did I get sent here" notice during initialisation
+  // (sessionStorage isn't available during SSR, hence the window guard).
+  const [notice] = useState<string | null>(() =>
+    typeof window === "undefined"
+      ? null
+      : window.sessionStorage.getItem("auth_redirect_reason"),
+  );
 
   useEffect(() => {
-    const storedNotice = window.sessionStorage.getItem("auth_redirect_reason");
-    if (storedNotice) {
-      setNotice(storedNotice);
-      window.sessionStorage.removeItem("auth_redirect_reason");
-    }
+    // It's a one-shot message: clear it as soon as the page has read it.
+    window.sessionStorage.removeItem("auth_redirect_reason");
   }, []);
 
   useEffect(() => {

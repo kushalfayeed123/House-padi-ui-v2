@@ -51,6 +51,39 @@ type Announcement = {
   property_title?: string;
 };
 
+// Direct-message threads exposed by /api/chat/threads. Field names are read
+// defensively (`title ?? subject`, `content ?? message`) so the UI keeps
+// working whichever alias the backend returns.
+type ChatThread = {
+  id: string;
+  title?: string;
+  subject?: string;
+  property_title?: string;
+  last_message?: string;
+  updated_at?: string;
+  created_at?: string;
+};
+
+type ThreadMessage = {
+  id: string;
+  sender_id?: string;
+  sender_role?: string;
+  content?: string;
+  message?: string;
+  created_at?: string;
+};
+
+const threadTitle = (thread: ChatThread): string =>
+  thread.title || thread.subject || thread.property_title || "Conversation";
+
+const threadTimestamp = (thread: ChatThread): string =>
+  thread.updated_at || thread.created_at || "";
+
+const messageBody = (message: ThreadMessage): string =>
+  message.content || message.message || "";
+
+const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+
 // "checking": request in flight. "available": the feature actually works —
 // real data, not a placeholder. "unavailable": nothing to show yet, either
 // because there's no data or the endpoint doesn't exist — the person sees
@@ -256,6 +289,168 @@ const statusAndDetail = (
   return ["unavailable", httpStatus ? `HTTP ${httpStatus}` : "no response"];
 };
 
+const MessagesPanel = ({
+  threads,
+  activeThreadId,
+  messages,
+  loading,
+  error,
+  replyText,
+  sendingReply,
+  userId,
+  messagingAvailable,
+  onSelectThread,
+  onReplyChange,
+  onSendReply,
+  onOpenAssistant,
+}: {
+  threads: ChatThread[];
+  activeThreadId: string | null;
+  messages: ThreadMessage[];
+  loading: boolean;
+  error: string | null;
+  replyText: string;
+  sendingReply: boolean;
+  userId?: string;
+  messagingAvailable: boolean;
+  onSelectThread: (threadId: string) => void;
+  onReplyChange: (value: string) => void;
+  onSendReply: (e: React.FormEvent) => void;
+  onOpenAssistant: () => void;
+}) => {
+  if (!messagingAvailable) {
+    return (
+      <EmptyState
+        title="Direct messaging is on its way"
+        body="A dedicated inbox for messaging your landlord is coming soon. In the meantime, the assistant in the corner can pass along questions, schedule tours, and help with your application."
+        action={
+          <button
+            onClick={onOpenAssistant}
+            className="inline-block rounded-xl bg-(--amber) px-5 py-2.5 text-sm font-semibold text-(--ink) hover:bg-(--amber-soft) transition"
+          >
+            Chat with the assistant
+          </button>
+        }
+      />
+    );
+  }
+
+  if (threads.length === 0) {
+    return (
+      <EmptyState
+        title="No conversations yet"
+        body="Once you and a landlord start messaging about a property, the conversation will appear here."
+        action={
+          <button
+            onClick={onOpenAssistant}
+            className="inline-block rounded-xl bg-(--amber) px-5 py-2.5 text-sm font-semibold text-(--ink) hover:bg-(--amber-soft) transition"
+          >
+            Chat with the assistant
+          </button>
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,320px)_1fr]">
+      <div className="space-y-2">
+        {threads.map((thread) => (
+          <button
+            key={thread.id}
+            onClick={() => onSelectThread(thread.id)}
+            className={`w-full rounded-2xl border p-4 text-left transition ${
+              activeThreadId === thread.id
+                ? "border-[var(--amber)]/50 bg-[var(--amber)]/10"
+                : "border-white/10 bg-[var(--ink-soft)] hover:bg-white/5"
+            }`}
+          >
+            <span className="block truncate text-sm font-semibold text-white">
+              {threadTitle(thread)}
+            </span>
+            {thread.last_message && (
+              <span className="mt-1 block truncate text-xs text-slate-400">
+                {thread.last_message}
+              </span>
+            )}
+            {threadTimestamp(thread) && (
+              <span className="mt-1 block text-[10px] text-slate-500">
+                {formatDate(threadTimestamp(thread))}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      <div className="flex min-h-[320px] flex-col rounded-2xl border border-white/10 bg-[var(--ink-soft)]">
+        {!activeThreadId ? (
+          <div className="flex flex-1 items-center justify-center p-8 text-sm text-slate-400">
+            Select a conversation to read and reply.
+          </div>
+        ) : (
+          <>
+            <div className="flex-1 space-y-3 overflow-y-auto p-5">
+              {error && <ErrorNotice message={error} />}
+              {loading ? (
+                <p className="text-sm text-slate-400">Loading conversation…</p>
+              ) : messages.length === 0 ? (
+                <p className="text-sm text-slate-400">
+                  No messages in this conversation yet.
+                </p>
+              ) : (
+                messages.map((msg) => {
+                  const mine =
+                    msg.sender_role === "renter" || msg.sender_id === userId;
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex ${mine ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
+                          mine
+                            ? "bg-[var(--amber)] text-[var(--ink)]"
+                            : "border border-white/10 bg-white/5 text-slate-200"
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap">{messageBody(msg)}</p>
+                        {msg.created_at && (
+                          <p className="mt-1 text-[10px] opacity-70">
+                            {formatDate(msg.created_at)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <form
+              onSubmit={onSendReply}
+              className="flex items-center gap-2 border-t border-white/10 p-3"
+            >
+              <input
+                value={replyText}
+                onChange={(e) => onReplyChange(e.target.value)}
+                placeholder="Write a message…"
+                className="flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-[var(--amber)]/50"
+              />
+              <button
+                type="submit"
+                disabled={sendingReply || !replyText.trim()}
+                className="rounded-xl bg-[var(--amber)] px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--amber-soft)] disabled:opacity-50"
+              >
+                {sendingReply ? "Sending…" : "Send"}
+              </button>
+            </form>
+
+          </>
+        )}
+      </div>
+
+    </div>
+  );
+};
+
 export const RenterDashboard = () => {
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [loading, setLoading] = useState(true);
@@ -304,6 +499,14 @@ export const RenterDashboard = () => {
 
   const [savedActionId, setSavedActionId] = useState<string | null>(null);
   const [savedError, setSavedError] = useState<string | null>(null);
+
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [threadMessages, setThreadMessages] = useState<ThreadMessage[]>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [threadError, setThreadError] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
 
   // Function to check status and launch modal if approved
   const handleCheckLandlordResponse = async (application: any) => {
@@ -449,6 +652,17 @@ export const RenterDashboard = () => {
         threadsRes.status === "fulfilled" ? "available" : "unavailable",
       );
 
+      if (threadsRes.status === "fulfilled") {
+        const body: unknown = threadsRes.value.data;
+        const list = Array.isArray(body)
+          ? asArray<ChatThread>(body)
+          : asArray<ChatThread>(
+              (body as { threads?: unknown } | null)?.threads ??
+                (body as { data?: unknown } | null)?.data,
+            );
+        setThreads(list);
+      }
+
       if (isDebugMode) {
         const byKey: Record<string, [FeatureStatus, string]> = {
           saved_get: statusAndDetail(savedRes),
@@ -534,6 +748,60 @@ export const RenterDashboard = () => {
       );
     } finally {
       setSavedActionId(null);
+    }
+  };
+
+  const openThread = async (threadId: string) => {
+    setActiveThreadId(threadId);
+    setThreadLoading(true);
+    setThreadError(null);
+    setThreadMessages([]);
+
+    try {
+      const res = await apiClient.get(`/api/chat/threads/${threadId}/messages`);
+      const payload: unknown = res.data?.data ?? res.data;
+      const list = Array.isArray(payload)
+        ? asArray<ThreadMessage>(payload)
+        : asArray<ThreadMessage>((payload as { messages?: unknown } | null)?.messages);
+      setThreadMessages(list);
+    } catch {
+      setThreadError("We couldn't load this conversation right now.");
+    } finally {
+      setThreadLoading(false);
+    }
+  };
+
+  const handleSendReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const body = replyText.trim();
+    if (!activeThreadId || !body) return;
+
+    setSendingReply(true);
+    setThreadError(null);
+
+    try {
+      const res = await apiClient.post(
+        `/api/chat/threads/${activeThreadId}/messages`,
+        { content: body },
+      );
+      const created: unknown = res.data?.data ?? res.data;
+      const createdMessage =
+        created && typeof created === "object" && "id" in created
+          ? (created as ThreadMessage)
+          : {
+              id: `local-${Date.now()}`,
+              content: body,
+              sender_role: "renter",
+              sender_id: user?.id,
+              created_at: new Date().toISOString(),
+            };
+
+      setThreadMessages((prev) => [...prev, createdMessage]);
+      setReplyText("");
+    } catch {
+      setThreadError("We couldn't send that message right now. Please try again.");
+    } finally {
+      setSendingReply(false);
     }
   };
 
@@ -1023,25 +1291,21 @@ export const RenterDashboard = () => {
               />
             )
           ) : activeTab === "messages" ? (
-            messagingStatus === "available" ? (
-              <EmptyState
-                title="Messages"
-                body="Your conversation threads will appear here."
-              />
-            ) : (
-              <EmptyState
-                title="Direct messaging is on its way"
-                body="A dedicated inbox for messaging your landlord is coming soon. In the meantime, the assistant in the corner can pass along questions, schedule tours, and help with your application."
-                action={
-                  <button
-                    onClick={openAssistant}
-                    className="inline-block rounded-xl bg-(--amber) px-5 py-2.5 text-sm font-semibold text-(--ink) hover:bg-(--amber-soft) transition"
-                  >
-                    Chat with the assistant
-                  </button>
-                }
-              />
-            )
+            <MessagesPanel
+              threads={threads}
+              activeThreadId={activeThreadId}
+              messages={threadMessages}
+              loading={threadLoading}
+              error={threadError}
+              replyText={replyText}
+              sendingReply={sendingReply}
+              userId={user?.id}
+              messagingAvailable={messagingStatus !== "unavailable"}
+              onSelectThread={openThread}
+              onReplyChange={setReplyText}
+              onSendReply={handleSendReply}
+              onOpenAssistant={openAssistant}
+            />
           ) : activeTab === "pending" && isDebugMode ? (
             <div className="space-y-4">
               <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-sm text-blue-200">
